@@ -1,0 +1,10 @@
+# depslib dependency file v1.0
+1445911123 source:/mnt/safe1/Engineering/Atmel Programs/linux-test-program/fuse.c
+	<avr/io.h>
+
+1386103290 source:/mnt/safe1/Engineering/Atmel Programs/linux-test-program/main.c
+	<avr/io.h>
+	<util/delay.h>
+	<avr/interrupt.h>
+	<stdlib.h>
+
