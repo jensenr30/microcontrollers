@@ -1,0 +1,32 @@
+This is a really stupid problem: I forgot to change the ports in the case. THEY ARE ALL PORTD.
+I will need to change those in the future.
+I would change them right now, but I don't have time to go through testing this after I change it.
+I don't want to break the code by "fixing a little error" and then never test the code.
+Next thing I know I'm trying to interpret a keyboard in a dark alley and BOOM.
+It doesn't work.
+And somebody stabbed me.
+It's a dangerous place.
+It's a DANGEROUS place.
+
+//clock data into the register.
+		switch(port){
+			case 'b':
+			case 'B':
+				PORTD &= ~(1 << clockPin);
+				PORTD |=  (1 << clockPin);
+				break;
+			case 'c':
+			case 'C':
+				PORTD &= ~(1 << clockPin);
+				PORTD |=  (1 << clockPin);
+				break;
+			case 'd':
+			case 'D':
+				PORTD &= ~(1 << clockPin);
+				PORTD |=  (1 << clockPin);
+				break;
+			default:
+				break;
+		}
+
+		
