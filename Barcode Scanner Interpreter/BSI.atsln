@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Atmel Studio Solution File, Format Version 11.00
+Project("{54F91283-7BC4-4236-8FF9-10F437C3AD48}") = "BSI", "BSI\BSI.cproj", "{31C70AD3-F7B4-4A07-8334-8457987AB2EB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|AVR = Debug|AVR
+		Release|AVR = Release|AVR
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{31C70AD3-F7B4-4A07-8334-8457987AB2EB}.Debug|AVR.ActiveCfg = Debug|AVR
+		{31C70AD3-F7B4-4A07-8334-8457987AB2EB}.Debug|AVR.Build.0 = Debug|AVR
+		{31C70AD3-F7B4-4A07-8334-8457987AB2EB}.Release|AVR.ActiveCfg = Release|AVR
+		{31C70AD3-F7B4-4A07-8334-8457987AB2EB}.Release|AVR.Build.0 = Release|AVR
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

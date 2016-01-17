@@ -1,0 +1,512 @@
+
+Testing LED Driver.elf:     file format elf32-avr
+
+Sections:
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .data         00000000  00800100  0000026a  000002fe  2**0
+                  CONTENTS, ALLOC, LOAD, DATA
+  1 .text         0000026a  00000000  00000000  00000094  2**1
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  2 .bss          00000003  00800100  00800100  000002fe  2**0
+                  ALLOC
+  3 .stab         000006cc  00000000  00000000  00000300  2**2
+                  CONTENTS, READONLY, DEBUGGING
+  4 .stabstr      00000097  00000000  00000000  000009cc  2**0
+                  CONTENTS, READONLY, DEBUGGING
+  5 .comment      0000002f  00000000  00000000  00000a63  2**0
+                  CONTENTS, READONLY
+  6 .debug_aranges 00000040  00000000  00000000  00000a92  2**0
+                  CONTENTS, READONLY, DEBUGGING
+  7 .debug_info   00000295  00000000  00000000  00000ad2  2**0
+                  CONTENTS, READONLY, DEBUGGING
+  8 .debug_abbrev 00000199  00000000  00000000  00000d67  2**0
+                  CONTENTS, READONLY, DEBUGGING
+  9 .debug_line   0000023a  00000000  00000000  00000f00  2**0
+                  CONTENTS, READONLY, DEBUGGING
+ 10 .debug_frame  00000094  00000000  00000000  0000113c  2**2
+                  CONTENTS, READONLY, DEBUGGING
+ 11 .debug_str    000001ca  00000000  00000000  000011d0  2**0
+                  CONTENTS, READONLY, DEBUGGING
+ 12 .debug_loc    00000135  00000000  00000000  0000139a  2**0
+                  CONTENTS, READONLY, DEBUGGING
+ 13 .debug_ranges 00000030  00000000  00000000  000014cf  2**0
+                  CONTENTS, READONLY, DEBUGGING
+
+Disassembly of section .text:
+
+00000000 <__vectors>:
+   0:	0c 94 34 00 	jmp	0x68	; 0x68 <__ctors_end>
+   4:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+   8:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+   c:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  10:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  14:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  18:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  1c:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  20:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  24:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  28:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  2c:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  30:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  34:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  38:	0c 94 57 00 	jmp	0xae	; 0xae <__vector_14>
+  3c:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  40:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  44:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  48:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  4c:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  50:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  54:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  58:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  5c:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  60:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+  64:	0c 94 46 00 	jmp	0x8c	; 0x8c <__bad_interrupt>
+
+00000068 <__ctors_end>:
+  68:	11 24       	eor	r1, r1
+  6a:	1f be       	out	0x3f, r1	; 63
+  6c:	cf ef       	ldi	r28, 0xFF	; 255
+  6e:	d8 e0       	ldi	r29, 0x08	; 8
+  70:	de bf       	out	0x3e, r29	; 62
+  72:	cd bf       	out	0x3d, r28	; 61
+
+00000074 <__do_clear_bss>:
+  74:	21 e0       	ldi	r18, 0x01	; 1
+  76:	a0 e0       	ldi	r26, 0x00	; 0
+  78:	b1 e0       	ldi	r27, 0x01	; 1
+  7a:	01 c0       	rjmp	.+2      	; 0x7e <.do_clear_bss_start>
+
+0000007c <.do_clear_bss_loop>:
+  7c:	1d 92       	st	X+, r1
+
+0000007e <.do_clear_bss_start>:
+  7e:	a3 30       	cpi	r26, 0x03	; 3
+  80:	b2 07       	cpc	r27, r18
+  82:	e1 f7       	brne	.-8      	; 0x7c <.do_clear_bss_loop>
+  84:	0e 94 b7 00 	call	0x16e	; 0x16e <main>
+  88:	0c 94 33 01 	jmp	0x266	; 0x266 <_exit>
+
+0000008c <__bad_interrupt>:
+  8c:	0c 94 00 00 	jmp	0	; 0x0 <__vectors>
+
+00000090 <init_timer0>:
+// Timers
+//------------------------------------------------------
+
+void init_timer0(){
+	
+	TCCR0A |= (1 << WGM01);				// timer works in CTC mode. (Clear Timer on Compare Match).
+  90:	84 b5       	in	r24, 0x24	; 36
+  92:	82 60       	ori	r24, 0x02	; 2
+  94:	84 bd       	out	0x24, r24	; 36
+	TCCR0B |=(1 << CS02)|(1 << CS00);	// set up timer prescaler
+  96:	85 b5       	in	r24, 0x25	; 37
+  98:	85 60       	ori	r24, 0x05	; 5
+  9a:	85 bd       	out	0x25, r24	; 37
+	TCNT0 = 0;							// reset the timer count.
+  9c:	16 bc       	out	0x26, r1	; 38
+	OCR0A = 0xff;						// set the output compare register.
+  9e:	8f ef       	ldi	r24, 0xFF	; 255
+  a0:	87 bd       	out	0x27, r24	; 39
+										// this register determines the speed at which the columns/rows are cycled through.
+	TIMSK0|= (1 << OCIE0A);				// enable an interrupt upon output compare match for value in timer0 register A
+  a2:	ee e6       	ldi	r30, 0x6E	; 110
+  a4:	f0 e0       	ldi	r31, 0x00	; 0
+  a6:	80 81       	ld	r24, Z
+  a8:	82 60       	ori	r24, 0x02	; 2
+  aa:	80 83       	st	Z, r24
+  ac:	08 95       	ret
+
+000000ae <__vector_14>:
+	
+}
+
+// this function handles when the timer0 has a compare match.
+ISR(TIMER0_COMPA_vect){
+  ae:	1f 92       	push	r1
+  b0:	0f 92       	push	r0
+  b2:	0f b6       	in	r0, 0x3f	; 63
+  b4:	0f 92       	push	r0
+  b6:	11 24       	eor	r1, r1
+  b8:	8f 93       	push	r24
+	
+	column++;							// increment column counter
+  ba:	80 91 02 01 	lds	r24, 0x0102
+  be:	8f 5f       	subi	r24, 0xFF	; 255
+  c0:	80 93 02 01 	sts	0x0102, r24
+	if(column >= 8){					// counter overflows at 8
+  c4:	80 91 02 01 	lds	r24, 0x0102
+  c8:	88 30       	cpi	r24, 0x08	; 8
+  ca:	70 f0       	brcs	.+28     	; 0xe8 <__vector_14+0x3a>
+		column = 0;						// reset to column 0
+  cc:	10 92 02 01 	sts	0x0102, r1
+		if(sector == 1){
+  d0:	80 91 01 01 	lds	r24, 0x0101
+  d4:	81 30       	cpi	r24, 0x01	; 1
+  d6:	29 f4       	brne	.+10     	; 0xe2 <__vector_14+0x34>
+			sweep = 0;					// if you have reached the last part
+  d8:	10 92 00 01 	sts	0x0100, r1
+			sector = 0;					// reset sector
+  dc:	10 92 01 01 	sts	0x0101, r1
+  e0:	03 c0       	rjmp	.+6      	; 0xe8 <__vector_14+0x3a>
+		}
+		else
+			sector = 1;					// otherwise, increment the sector
+  e2:	81 e0       	ldi	r24, 0x01	; 1
+  e4:	80 93 01 01 	sts	0x0101, r24
+	}
+	
+}
+  e8:	8f 91       	pop	r24
+  ea:	0f 90       	pop	r0
+  ec:	0f be       	out	0x3f, r0	; 63
+  ee:	0f 90       	pop	r0
+  f0:	1f 90       	pop	r1
+  f2:	18 95       	reti
+
+000000f4 <init_ADC>:
+// The result from the conversion will be stored in the AnalogReturn variable.
+void init_ADC(){
+	
+	//DDRC &= ~(1 << PORTC0);			// make PORTC0 an input for analog to digital conversions
+	
+	DDRC &= ~(1 << PORTC0);				// make PORTC0 an input for analog to digital conversions
+  f4:	38 98       	cbi	0x07, 0	; 7
+	
+	ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Set ADC prescalar to 128
+  f6:	ea e7       	ldi	r30, 0x7A	; 122
+  f8:	f0 e0       	ldi	r31, 0x00	; 0
+  fa:	80 81       	ld	r24, Z
+  fc:	87 60       	ori	r24, 0x07	; 7
+  fe:	80 83       	st	Z, r24
+	
+	ADMUX |= (1 << REFS0);				// Set ADC reference to AVCC
+ 100:	ac e7       	ldi	r26, 0x7C	; 124
+ 102:	b0 e0       	ldi	r27, 0x00	; 0
+ 104:	8c 91       	ld	r24, X
+ 106:	80 64       	ori	r24, 0x40	; 64
+ 108:	8c 93       	st	X, r24
+	
+	// No MUX values needed to be changed to use ADC0
+	
+	ADCSRA |= (1 << ADATE);				// Auto Trigger Enable
+ 10a:	80 81       	ld	r24, Z
+ 10c:	80 62       	ori	r24, 0x20	; 32
+ 10e:	80 83       	st	Z, r24
+	
+	ADCSRA |= (1 << ADEN);				// enable the ADC
+ 110:	80 81       	ld	r24, Z
+ 112:	80 68       	ori	r24, 0x80	; 128
+ 114:	80 83       	st	Z, r24
+	ADCSRA |= (1 << ADSC);				// start continuously converting analog to digital
+ 116:	80 81       	ld	r24, Z
+ 118:	80 64       	ori	r24, 0x40	; 64
+ 11a:	80 83       	st	Z, r24
+ 11c:	08 95       	ret
+
+0000011e <shift_display_32>:
+// LED Matrix Shift Out 32 Bits
+//------------------------------------------------------
+
+#define REG_SIZE 32
+// this shifts out 32 bits
+void shift_display_32(unsigned long int data){
+ 11e:	cf 92       	push	r12
+ 120:	df 92       	push	r13
+ 122:	ef 92       	push	r14
+ 124:	ff 92       	push	r15
+ 126:	0f 93       	push	r16
+ 128:	1f 93       	push	r17
+ 12a:	e0 e2       	ldi	r30, 0x20	; 32
+ 12c:	f0 e0       	ldi	r31, 0x00	; 0
+	
+	int j;											// this will be used to index through the rows
+	long unsigned int mask = 1;						// this will be used to index through the data
+ 12e:	c1 2c       	mov	r12, r1
+ 130:	d1 2c       	mov	r13, r1
+ 132:	76 01       	movw	r14, r12
+ 134:	c3 94       	inc	r12
+	
+	for(j=0; j<REG_SIZE; j++){
+		if(data&mask)								// if the bit at this index is 1,
+ 136:	97 01       	movw	r18, r14
+ 138:	86 01       	movw	r16, r12
+ 13a:	06 23       	and	r16, r22
+ 13c:	17 23       	and	r17, r23
+ 13e:	28 23       	and	r18, r24
+ 140:	39 23       	and	r19, r25
+ 142:	01 2b       	or	r16, r17
+ 144:	02 2b       	or	r16, r18
+ 146:	03 2b       	or	r16, r19
+ 148:	11 f0       	breq	.+4      	; 0x14e <shift_display_32+0x30>
+			PORTD |=  (1 << p_shift_data);			// set the data pin high
+ 14a:	5c 9a       	sbi	0x0b, 4	; 11
+ 14c:	01 c0       	rjmp	.+2      	; 0x150 <shift_display_32+0x32>
+		else										// else,
+			PORTD &= ~(1 << p_shift_data);			// set the data pint low
+ 14e:	5c 98       	cbi	0x0b, 4	; 11
+		
+		PORTD &= ~(1 << p_shift_clock);				// clock data into the register
+ 150:	5d 98       	cbi	0x0b, 5	; 11
+		PORTD |=  (1 << p_shift_clock);				// "
+ 152:	5d 9a       	sbi	0x0b, 5	; 11
+		
+		mask = mask << 1;							// the mask gets shifted left 1 bit
+ 154:	cc 0c       	add	r12, r12
+ 156:	dd 1c       	adc	r13, r13
+ 158:	ee 1c       	adc	r14, r14
+ 15a:	ff 1c       	adc	r15, r15
+ 15c:	31 97       	sbiw	r30, 0x01	; 1
+void shift_display_32(unsigned long int data){
+	
+	int j;											// this will be used to index through the rows
+	long unsigned int mask = 1;						// this will be used to index through the data
+	
+	for(j=0; j<REG_SIZE; j++){
+ 15e:	59 f7       	brne	.-42     	; 0x136 <shift_display_32+0x18>
+		PORTD |=  (1 << p_shift_clock);				// "
+		
+		mask = mask << 1;							// the mask gets shifted left 1 bit
+	}
+	
+}
+ 160:	1f 91       	pop	r17
+ 162:	0f 91       	pop	r16
+ 164:	ff 90       	pop	r15
+ 166:	ef 90       	pop	r14
+ 168:	df 90       	pop	r13
+ 16a:	cf 90       	pop	r12
+ 16c:	08 95       	ret
+
+0000016e <main>:
+int main (void)
+{
+	//------------------------------------------------------
+	// Initialize Things
+	//------------------------------------------------------
+	DDRD = 0x7f;							// lowest 7 bits are output bits
+ 16e:	8f e7       	ldi	r24, 0x7F	; 127
+ 170:	8a b9       	out	0x0a, r24	; 10
+	DDRD &= ~(1 << p_trigger);				// PORTD7 is an input
+ 172:	57 98       	cbi	0x0a, 7	; 10
+	//DDRB |= (1 << p_trigger_type_normal);	// PORTB0 controls the trigger type. 0 = continuous, 1 = normal
+	//DDRB |= (1 << p_trigger_type_external);	// PORTB1 controls the trigger type. 0 = internal, 1 = external
+	//PORTD &= !(0x7f);						// set lowers 7 bits low
+	
+	DDRB &= ~(1 <<p_sec_per_div);			// sec_per_div is an input.
+ 174:	22 98       	cbi	0x04, 2	; 4
+	
+	sei();									// enable global interrupts
+ 176:	78 94       	sei
+	init_ADC();								// initialize the Analog to Digital Converter. It will continuously be taking samples from here on out
+ 178:	0e 94 7a 00 	call	0xf4	; 0xf4 <init_ADC>
+	init_timer0();							// set up timer0. This timer will be used to control the speed of the oscilloscope sweep
+ 17c:	0e 94 48 00 	call	0x90	; 0x90 <init_timer0>
+		
+		
+		secPerDiv = PINB;
+		// check to see if the user pressed the "speed up" button
+		if(secPerDiv&(1<<p_sec_per_div)){
+			OCR0A = 0xff;
+ 180:	55 24       	eor	r5, r5
+ 182:	5a 94       	dec	r5
+		}
+		else
+		{
+			OCR0A = 0x08;
+ 184:	68 94       	set
+ 186:	66 24       	eor	r6, r6
+ 188:	63 f8       	bld	r6, 3
+		}
+		
+		
+		analogSampleLast = analogSample;				// store previous analog sample
+		analogSample = ADCL >> 6;						// generate new 4 bit analog sample
+ 18a:	08 e7       	ldi	r16, 0x78	; 120
+ 18c:	10 e0       	ldi	r17, 0x00	; 0
+		analogSample |= ADCH << 2;
+ 18e:	c9 e7       	ldi	r28, 0x79	; 121
+ 190:	d0 e0       	ldi	r29, 0x00	; 0
+			}
+		}
+		// look for continuous triggering
+		else if(sweep == 0){
+			TCNT0 = 0;								// reset timer
+			sweep = 1;								// start sweep
+ 192:	77 24       	eor	r7, r7
+ 194:	73 94       	inc	r7
+			if(column&4)						// check bit 2
+				PORTD |=  (1 << p_demux2);
+			else
+				PORTD &= ~(1 << p_demux2);
+		
+			shift_display_32( ((unsigned long int)1)<<(analogSample+(16*(sector==0))) );
+ 196:	81 2c       	mov	r8, r1
+ 198:	91 2c       	mov	r9, r1
+ 19a:	54 01       	movw	r10, r8
+ 19c:	83 94       	inc	r8
+ 19e:	c1 2c       	mov	r12, r1
+ 1a0:	d1 2c       	mov	r13, r1
+ 1a2:	68 94       	set
+ 1a4:	ee 24       	eor	r14, r14
+ 1a6:	e4 f8       	bld	r14, 4
+ 1a8:	f1 2c       	mov	r15, r1
+		//trigSample = PIND;								// sample trigger input
+		
+		
+		secPerDiv = PINB;
+		// check to see if the user pressed the "speed up" button
+		if(secPerDiv&(1<<p_sec_per_div)){
+ 1aa:	1a 9b       	sbis	0x03, 2	; 3
+ 1ac:	02 c0       	rjmp	.+4      	; 0x1b2 <main+0x44>
+			OCR0A = 0xff;
+ 1ae:	57 bc       	out	0x27, r5	; 39
+ 1b0:	01 c0       	rjmp	.+2      	; 0x1b4 <main+0x46>
+		}
+		else
+		{
+			OCR0A = 0x08;
+ 1b2:	67 bc       	out	0x27, r6	; 39
+		}
+		
+		
+		analogSampleLast = analogSample;				// store previous analog sample
+		analogSample = ADCL >> 6;						// generate new 4 bit analog sample
+ 1b4:	f8 01       	movw	r30, r16
+ 1b6:	90 81       	ld	r25, Z
+		analogSample |= ADCH << 2;
+ 1b8:	68 81       	ld	r22, Y
+					}
+				}
+			}
+		}
+		// look for continuous triggering
+		else if(sweep == 0){
+ 1ba:	80 91 00 01 	lds	r24, 0x0100
+ 1be:	81 11       	cpse	r24, r1
+ 1c0:	07 c0       	rjmp	.+14     	; 0x1d0 <main+0x62>
+			TCNT0 = 0;								// reset timer
+ 1c2:	16 bc       	out	0x26, r1	; 38
+			sweep = 1;								// start sweep
+ 1c4:	70 92 00 01 	sts	0x0100, r7
+			column = 0;								// start at the first column
+ 1c8:	10 92 02 01 	sts	0x0102, r1
+			sector = 0;								// start in the first sector
+ 1cc:	10 92 01 01 	sts	0x0101, r1
+		}
+		
+		if(sweep){
+ 1d0:	80 91 00 01 	lds	r24, 0x0100
+ 1d4:	88 23       	and	r24, r24
+ 1d6:	49 f3       	breq	.-46     	; 0x1aa <main+0x3c>
+			
+			// figure out what column will be on
+		
+			if(column&1)						// check bit 0
+ 1d8:	80 91 02 01 	lds	r24, 0x0102
+ 1dc:	80 ff       	sbrs	r24, 0
+ 1de:	02 c0       	rjmp	.+4      	; 0x1e4 <main+0x76>
+				PORTD |=  (1 << p_demux0);
+ 1e0:	58 9a       	sbi	0x0b, 0	; 11
+ 1e2:	01 c0       	rjmp	.+2      	; 0x1e6 <main+0x78>
+			else
+				PORTD &= ~(1 << p_demux0);
+ 1e4:	58 98       	cbi	0x0b, 0	; 11
+			if(column&2)						// check bit 1
+ 1e6:	80 91 02 01 	lds	r24, 0x0102
+ 1ea:	81 ff       	sbrs	r24, 1
+ 1ec:	02 c0       	rjmp	.+4      	; 0x1f2 <main+0x84>
+				PORTD |=  (1 << p_demux1);
+ 1ee:	59 9a       	sbi	0x0b, 1	; 11
+ 1f0:	01 c0       	rjmp	.+2      	; 0x1f4 <main+0x86>
+			else
+				PORTD &= ~(1 << p_demux1);
+ 1f2:	59 98       	cbi	0x0b, 1	; 11
+			if(column&4)						// check bit 2
+ 1f4:	80 91 02 01 	lds	r24, 0x0102
+ 1f8:	82 ff       	sbrs	r24, 2
+ 1fa:	02 c0       	rjmp	.+4      	; 0x200 <main+0x92>
+				PORTD |=  (1 << p_demux2);
+ 1fc:	5a 9a       	sbi	0x0b, 2	; 11
+ 1fe:	01 c0       	rjmp	.+2      	; 0x202 <main+0x94>
+			else
+				PORTD &= ~(1 << p_demux2);
+ 200:	5a 98       	cbi	0x0b, 2	; 11
+			OCR0A = 0x08;
+		}
+		
+		
+		analogSampleLast = analogSample;				// store previous analog sample
+		analogSample = ADCL >> 6;						// generate new 4 bit analog sample
+ 202:	29 2f       	mov	r18, r25
+ 204:	22 95       	swap	r18
+ 206:	26 95       	lsr	r18
+ 208:	26 95       	lsr	r18
+ 20a:	23 70       	andi	r18, 0x03	; 3
+		analogSample |= ADCH << 2;
+ 20c:	70 e0       	ldi	r23, 0x00	; 0
+ 20e:	66 0f       	add	r22, r22
+ 210:	77 1f       	adc	r23, r23
+ 212:	66 0f       	add	r22, r22
+ 214:	77 1f       	adc	r23, r23
+ 216:	cb 01       	movw	r24, r22
+ 218:	aa 27       	eor	r26, r26
+ 21a:	97 fd       	sbrc	r25, 7
+ 21c:	a0 95       	com	r26
+ 21e:	ba 2f       	mov	r27, r26
+ 220:	82 2b       	or	r24, r18
+			if(column&4)						// check bit 2
+				PORTD |=  (1 << p_demux2);
+			else
+				PORTD &= ~(1 << p_demux2);
+		
+			shift_display_32( ((unsigned long int)1)<<(analogSample+(16*(sector==0))) );
+ 222:	bc 01       	movw	r22, r24
+ 224:	80 91 01 01 	lds	r24, 0x0101
+ 228:	81 11       	cpse	r24, r1
+ 22a:	02 c0       	rjmp	.+4      	; 0x230 <main+0xc2>
+ 22c:	c7 01       	movw	r24, r14
+ 22e:	01 c0       	rjmp	.+2      	; 0x232 <main+0xc4>
+ 230:	c6 01       	movw	r24, r12
+ 232:	68 0f       	add	r22, r24
+ 234:	79 1f       	adc	r23, r25
+ 236:	a5 01       	movw	r20, r10
+ 238:	94 01       	movw	r18, r8
+ 23a:	04 c0       	rjmp	.+8      	; 0x244 <main+0xd6>
+ 23c:	22 0f       	add	r18, r18
+ 23e:	33 1f       	adc	r19, r19
+ 240:	44 1f       	adc	r20, r20
+ 242:	55 1f       	adc	r21, r21
+ 244:	6a 95       	dec	r22
+ 246:	d2 f7       	brpl	.-12     	; 0x23c <main+0xce>
+ 248:	ca 01       	movw	r24, r20
+ 24a:	b9 01       	movw	r22, r18
+ 24c:	0e 94 8f 00 	call	0x11e	; 0x11e <shift_display_32>
+			PORTD &= ~(1 << p_shift_update);				// update shift register output buffer
+ 250:	5e 98       	cbi	0x0b, 6	; 11
+			PORTD |=  (1 << p_shift_update);				// "
+ 252:	5e 9a       	sbi	0x0b, 6	; 11
+			PORTD |= (1 << p_demux_en);						// turn on display
+ 254:	5b 9a       	sbi	0x0b, 3	; 11
+	#else
+		//round up by default
+		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+	#endif
+
+	__builtin_avr_delay_cycles(__ticks_dc);
+ 256:	8f ec       	ldi	r24, 0xCF	; 207
+ 258:	97 e0       	ldi	r25, 0x07	; 7
+ 25a:	01 97       	sbiw	r24, 0x01	; 1
+ 25c:	f1 f7       	brne	.-4      	; 0x25a <main+0xec>
+ 25e:	00 c0       	rjmp	.+0      	; 0x260 <main+0xf2>
+ 260:	00 00       	nop
+			_delay_ms(1);									// display for some time
+			PORTD &= ~(1 << p_demux_en);					// turn off display
+ 262:	5b 98       	cbi	0x0b, 3	; 11
+ 264:	a2 cf       	rjmp	.-188    	; 0x1aa <main+0x3c>
+
+00000266 <_exit>:
+ 266:	f8 94       	cli
+
+00000268 <__stop_program>:
+ 268:	ff cf       	rjmp	.-2      	; 0x268 <__stop_program>
