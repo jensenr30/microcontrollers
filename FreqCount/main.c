@@ -24,7 +24,7 @@
 #include <avr/io.h>				// standard input/output functions
 #include <util/delay.h>			// include the use of the delay functions _delay_ms() and _delay_us()
 #include <avr/interrupt.h>		// this allows me to use interrupt functions
-
+#include "shift_out_24_PORTA_only.h"		// this gives us the function we need to utilize a shift register to shift OUT data.
 
 //=================================================================
 // pin definitions
@@ -37,11 +37,31 @@
 */
 #define p_freq_in			PORTB2		// Input digital signal (0 to 5V). We try to measure the frequency of this one.
 
+
+
 // PORTA
 /*
 #define p_linePosition		PORTA3		// this pin shows (in time) roughly where the BSI interprets the line to exist.
 #define p_dataReady			PORTA7		// this tells the master microcontroller that the analog signal from p_line is ready to be read.
 */
+
+// OUTPUT SHIFT REGISTER pins:
+#define p_SR_data			PORTA3		// this pin holds the data that must be clocked into the shift register
+#define p_SR_RCK			PORTA4		// this pin updates the outputs of the shift register
+#define p_SR_SCK			PORTA5		// this pin clocks data into the shift register
+
+// this is how many seconds are contained in one clock cycle
+#define clock_period_sec ( 1/(double)F_CPU )
+// this is how many seconds are contained in one overflow value (if the overflow value is 1, this is how many seconds it took to reach that overflow value of 1).
+#define overflow_period_sec ( (0x10000) / (double)F_CPU )
+
+// this tells us how many clock cycles (from the 20 MHz clock) must pass before we can make a measurement with no more than 1 ppm error.
+// the maximum rate at which this will measure frequency is 40 Hz (it will take a frequency measurement no more than 40 times every second).
+#define min_clock_cycles_1ppm ( (uint32_t)500000 )
+
+// this is the max value of timer1
+#define timer1_TOP ((uint16_t)0xffff)
+
 
 //=================================================================
 // function definitions
@@ -59,40 +79,40 @@
 // variable declaration and numerical definitions
 //=================================================================
 
-// this is used to capture the state of the PORTB register.
-volatile uint8_t portBdata = 0;
-
-// this is the max value of timer1
-#define timer1_TOP ((uint16_t)0xffff)
-
+// this keeps track of whether or not the counter has been triggered for the first time.
+//volatile uint8_t triggered = 0;
 // this keeps track of how many times Timer1 has overflowed.
 // with a clock frequency of 20 MHz, a 16-bit timer, and a 32-bit overflow counter, this program should be able to count periods as long as 162 days.
-volatile uint32_t overflows = 0;
-// this is how many seconds are contained in one clock cycle
-double clock_period_sec = 1/(double)F_CPU;
-// this is how many seconds are contained in one overflow value (if the overflow value is 1, this is how many seconds it took to reach that overflow value of 1).
-double overflow_period_sec = (0x10000) / (double)F_CPU;
-
+uint8_t overflows = 0;
 // this records how many cycles (periods) have occurred on the p_freq_in pin.
-volatile uint32_t freq_in_cycles = 0;
-// this keeps track of whether or not the counter has been triggered for the first time.
-volatile uint8_t triggered = 0;
+uint16_t freq_in_cycles = 0;
 
-// this tells us how many clock cycles (from the 20 MHz clock) must pass before we can make a measurement with no more than 1 ppm error.
-// the maximum rate at which this will measure frequency is 40 Hz (it will take a frequency measurement no more than 40 times every second).
-static uint32_t min_clock_cycles_1ppm = 1e6/2;
 // these two variables record the state of the timer and overflow counter at the moment when 
-volatile uint32_t ON_time_overflows = 0;
-volatile uint16_t ON_time_timer = 12345;
+//uint16_t ON_time_timer = 12345;
+//volatile uint32_t ON_time_overflows = 0;
 // this is updated with measurements of the input frequency
-volatile double freq_in_measurement_Hz = 0;
+double freq_in_measurement_Hz = 0;
 // this is updated with measurements of the duty cycle (%)
-volatile double freq_in_duty_cycle = 0;
+//volatile double freq_in_duty_cycle = 0;
+
+// this is a dummy variable used to debug the shift register
+//uint32_t data;
+
+uint8_t sevenseg[10] = {0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x67};
+
+
+// this keeps track of which digit is being displayed (The Persistance of vision technique is used. Only one 7-segment display is lit at a time.)
+uint8_t digit = 0;
+// this is the data that is displayed
+// default data is all underlines
+uint8_t disp_data[6];// = {0x08,0x08,0x08,0x08,0x08,0x08};
+
 
 //=================================================================
 // function declarations
 //=================================================================
 
+/*
 // this starts timer0
 void init_timer0()
 {
@@ -105,6 +125,7 @@ void init_timer0()
 	// this is the default setting for PWM (50 % duty cycle)
 	OCR0A = 55;
 }
+*/
 
 
 // this gets timer1 up and running
@@ -114,11 +135,11 @@ void init_timer1()
 	
 	TCCR1B |= (1<<CS10);			// timer1 is clokced from the main clock (20 MHz)
 	
-	TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
-	TCNT1L = 0;						// "
+	//TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
+	//TCNT1L = 0;						// "
 	
-	OCR1AH = 0xff;					// set initial high byte of the output compare register
-	OCR1AL = 0xff;					// set initial low  byte of the output compare register
+	OCR1AH = 0xff;					// set high byte of the output compare register
+	OCR1AL = 0xff;					// set low  byte of the output compare register
 	
 	TIMSK1 |= (1<<OCIE1A);			// enable the output-compare interrupt for register A
 	
@@ -132,7 +153,7 @@ ISR(PCINT1_vect)
 	// First things first: read port and record time. These are time-crucial.
 	//-----------------------------------------------------------------
 	// read data on PORTB
-	portBdata = PINB;
+	uint8_t portBdata = PINB;
 	
 	// record the current time (from timer1)
 	// this is useful when doing calculations on the line position
@@ -150,38 +171,30 @@ ISR(PCINT1_vect)
 	// if the signal went high,
 	if( freq_in_state )
 	{
+		// record that the input signal DID, in fact, have a (possibly another) rising edge.
+		freq_in_cycles++;
 		
-		// if the p_freq_in pin has gone from high to low before (has triggered before) then we can make an acurate measurement.
-		if( triggered )
-		{
-			// if the current sample has been going for at least the number of cycles needed to get 1 ppm resolution,
-			if( (overflows<<16) + currentTimer1 >= min_clock_cycles_1ppm)
-			{	
-				// start your next sample by resetting Timer1.
-				TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
-				TCNT1L = 0;						// "
+		// if the current sample has been going for at least the number of cycles needed to get 1 ppm resolution,
+		if( ((uint32_t)overflows<<16) + (uint16_t)currentTimer1 >= min_clock_cycles_1ppm)
+		{	
+			// start your next sample by resetting Timer1.
+			TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
+			TCNT1L = 0;						// "
 				
-				// calculate the period over which this sampled was performed.
-				double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
-				// record the frequency
-				freq_in_measurement_Hz = freq_in_cycles/period_sec;
-				// calculate the ON_time in seconds
-				double ON_time_sec = (ON_time_timer*clock_period_sec) + (ON_time_overflows*overflow_period_sec);
-				// record the duty cycle
-				freq_in_duty_cycle = ON_time_sec/period_sec;
-			}
-			// if it is not yet time to measure the frequency,
-			else
-			{
-				// record that the input signal DID, in fact, have another rising edge.
-				freq_in_cycles++;
-			}
-		}
-		// if p_freq_in has never gone high before,  the device was probably just powered up.
-		else
-		{
-			 // record this as the first trigger.
-			triggered = 1;
+			// calculate the period over which this sampled was performed.
+			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
+			// record the frequency
+			freq_in_measurement_Hz = freq_in_cycles/period_sec;
+			// calculate the ON_time in seconds
+			//double ON_time_sec = (ON_time_timer*clock_period_sec) + (ON_time_overflows*overflow_period_sec);
+			// record the duty cycle
+			//freq_in_duty_cycle = ON_time_sec/period_sec;
+				
+			// reset all variables (Timer1 was already reset above)
+			freq_in_cycles = 0;
+			overflows = 0;
+			//ON_time_timer = 0;
+			//ON_time_overflows = 0;
 		}
 		
 	}
@@ -193,8 +206,8 @@ ISR(PCINT1_vect)
 		//-----------------------------------------------------------------
 		
 		// record when the digital signal went low
-		ON_time_timer = currentTimer1;
-		ON_time_overflows = overflows;
+		//ON_time_timer = currentTimer1;
+		//ON_time_overflows = overflows;
 		
 	}
 	
@@ -234,15 +247,16 @@ int main(void)
 	 // set individual pin I/O directions
 	set_input(DDRB, p_freq_in);
 	
-	/*
+	
 	// PORTA
 	// set individual pin I/O directions
-	set_output(DDRA, p_linePosition);
-	set_output(DDRA, p_dataReady);
-	// initial states
-	low(PORTA, p_linePosition);
-	low(PORTA, p_dataReady);
-	*/
+	set_output(DDRA, p_SR_data);
+	set_output(DDRA, p_SR_SCK);
+	set_output(DDRA, p_SR_RCK);
+	// set the intial values of these pins
+	//low(PORTA, p_SR_data);
+	//low(PORTA, p_SR_SCK);
+	//low(PORTA, p_SR_RCK);
 	
 	// set up timers and interrupts
 	sei();								// enable global interrupts
@@ -252,8 +266,63 @@ int main(void)
 	// the main() function only serves to setup the program. everything happens based on interrupts, so our work in the main() function is done. we can kick back
 	while(1)
     {
-		// You do nothing!
-		// As if the solution to all your problems will just fall right out of the sky!
+		// check if we are starting a new frame (a new set of six display digits)
+		if(digit >= 6)
+		{
+			digit = 0;
+			double decade;
+			
+			// grab the current frequency measurement
+			double currentFreq = freq_in_measurement_Hz;
+			
+			// records which significant figure of the number we are currently processing
+			// default is a bogus value
+			int8_t sigfig = 99;
+			for(decade = 10e6; decade >= 1e-6; decade/=10.0)
+			{
+				// if you have found the first significant digit,
+				if(currentFreq >= decade && sigfig == 99)
+				{
+					// start processing the number into 
+					sigfig = 0;
+				}
+				// if you have found at least the first significant digit,
+				if(sigfig <= 5)
+				{
+					// record what this digit was by putting it in the disp_data
+					disp_data[sigfig] = (uint8_t)(currentFreq/decade);
+					// subtract the digit that has already been accounted for
+					currentFreq -= (double)disp_data[sigfig]*decade;
+					// replace the digit with the data that will produce a digit on the seven segment display
+					disp_data[sigfig] = sevenseg[disp_data[sigfig]];
+					// if this is the ones place,
+					if(decade == 1)
+					{
+						// add the decimal place
+						disp_data[sigfig] |= 0x80;
+					}
+					// increment the sigfig
+					sigfig++;
+				}
+				
+			}
+		}
+		
+		// debugging the shift register chain
+		//if(data) data <<= 1;
+		//if(data >= ((uint32_t)1 << 6)) data = 1;
+		//if(data == 0) data = 1;
+		
+		// build data and shift it into the registers
+		shift_out_24_PORTA(p_SR_SCK, p_SR_data, 16, ((uint16_t)1<<(digit+8))|(uint16_t)disp_data[digit], 'm');
+		
+		// update the output registers
+		low(PORTA,p_SR_RCK);
+		high(PORTA,p_SR_RCK);
+		_delay_ms(2);
+		
+		// We have just displayed a digit. It is time to 
+		digit++;
 	}
 }
 

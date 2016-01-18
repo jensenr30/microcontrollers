@@ -292,13 +292,13 @@ void shift_out_328(char port, unsigned char clockPin, unsigned char dataPin, uns
 		switch(port){
 			case 'b':
 			case 'B':
-				PORTD &= ~(1 << clockPin);
-				PORTD |=  (1 << clockPin);
+				PORTB &= ~(1 << clockPin);
+				PORTB |=  (1 << clockPin);
 				break;
 			case 'c':
 			case 'C':
-				PORTD &= ~(1 << clockPin);
-				PORTD |=  (1 << clockPin);
+				PORTC &= ~(1 << clockPin);
+				PORTC |=  (1 << clockPin);
 				break;
 			case 'd':
 			case 'D':
