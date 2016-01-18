@@ -83,7 +83,7 @@
 //volatile uint8_t triggered = 0;
 // this keeps track of how many times Timer1 has overflowed.
 // with a clock frequency of 20 MHz, a 16-bit timer, and a 32-bit overflow counter, this program should be able to count periods as long as 162 days.
-uint8_t overflows = 0;
+uint32_t overflows = 0;
 // this records how many cycles (periods) have occurred on the p_freq_in pin.
 uint16_t freq_in_cycles = 0;
 
