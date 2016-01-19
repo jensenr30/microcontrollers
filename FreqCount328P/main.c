@@ -317,8 +317,6 @@ int main(void)
 		// build data and shift it into the registers
 		shift_out_328_PORTD(p_SR_SCK, p_SR_data, 16, ((uint16_t)1<<(digit+8))|(uint16_t)disp_data[digit], 'm');
 		
-		//shift_out_328_PORTD(p_SR_SCK, p_SR_data, 16, (uint16_t)0x100|sevenseg[4], 'm');
-		
 		// update the output registers
 		low(PORTD,p_SR_RCK);
 		high(PORTD,p_SR_RCK);
