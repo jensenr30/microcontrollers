@@ -212,7 +212,7 @@ Disassembly of section .text:
  192:	93 b1       	in	r25, 0x03	; 3
  194:	80 91 84 00 	lds	r24, 0x0084
  198:	c0 90 85 00 	lds	r12, 0x0085
- 19c:	90 ff       	sbrs	r25, 0
+ 19c:	90 fd       	sbrc	r25, 0
  19e:	6f c0       	rjmp	.+222    	; 0x27e <__vector_3+0x11e>
  1a0:	d1 2c       	mov	r13, r1
  1a2:	dc 2c       	mov	r13, r12

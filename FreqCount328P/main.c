@@ -31,20 +31,11 @@
 //=================================================================
 
 // PORTB
-/*
-#define p_sweep				PORTB1		// this is the square wave signal that tells us what direction the laser is sweeping.
-										// The rising/falling edges tells us when it changes its sweep direction.
-*/
 #define p_freq_in			PORTB0		// Input digital signal (0 to 5V). We try to measure the frequency of this one.
 
 
 
 // PORTA
-/*
-#define p_linePosition		PORTA3		// this pin shows (in time) roughly where the BSI interprets the line to exist.
-#define p_dataReady			PORTA7		// this tells the master microcontroller that the analog signal from p_line is ready to be read.
-*/
-
 // OUTPUT SHIFT REGISTER pins:
 #define p_SR_data			PORTD5		// this pin holds the data that must be clocked into the shift register
 #define p_SR_RCK			PORTD6		// this pin updates the outputs of the shift register
@@ -88,8 +79,8 @@ uint32_t overflows = 0;
 uint16_t freq_in_cycles = 0;
 
 // these two variables record the state of the timer and overflow counter at the moment when 
-//uint16_t ON_time_timer = 12345;
-//volatile uint32_t ON_time_overflows = 0;
+//uint16_t OFF_time_timer = 12345;
+//volatile uint32_t OFF_time_overflows = 0;
 // this is updated with measurements of the input frequency
 double freq_in_measurement_Hz = 0;
 // this is updated with measurements of the duty cycle (%)
@@ -181,10 +172,10 @@ ISR(PCINT0_vect)
 	// grab the state of the freq_in pin.
 	uint8_t freq_in_state = ( (portBdata & (1<<p_freq_in))  >> p_freq_in );
 	
-	// if the signal went high,
-	if( freq_in_state )
+	// if the signal went low,
+	if( !freq_in_state )
 	{
-		// record that the input signal DID, in fact, have a (possibly another) rising edge.
+		// record that the input signal DID, in fact, have a (possibly another) falling edge.
 		freq_in_cycles++;
 		
 		// if the current sample has been going for at least the number of cycles needed to get 1 ppm resolution,
@@ -198,16 +189,16 @@ ISR(PCINT0_vect)
 			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
 			// record the frequency
 			freq_in_measurement_Hz = freq_in_cycles/period_sec;
-			// calculate the ON_time in seconds
-			//double ON_time_sec = (ON_time_timer*clock_period_sec) + (ON_time_overflows*overflow_period_sec);
+			// calculate the OFF_time in seconds
+			//double OFF_time_sec = (OFF_time_timer*clock_period_sec) + (OFF_time_overflows*overflow_period_sec);
 			// record the duty cycle
-			//freq_in_duty_cycle = ON_time_sec/period_sec;
+			//freq_in_duty_cycle = OFF_time_sec/period_sec;
 				
 			// reset all variables (Timer1 was already reset above)
 			freq_in_cycles = 0;
 			overflows = 0;
-			//ON_time_timer = 0;
-			//ON_time_overflows = 0;
+			//OFF_time_timer = 0;
+			//OFF_time_overflows = 0;
 		}
 		
 	}
@@ -219,8 +210,8 @@ ISR(PCINT0_vect)
 		//-----------------------------------------------------------------
 		
 		// record when the digital signal went low
-		//ON_time_timer = currentTimer1;
-		//ON_time_overflows = overflows;
+		//OFF_time_timer = currentTimer1;
+		//OFF_time_overflows = overflows;
 		
 	}
 	
