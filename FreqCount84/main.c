@@ -24,27 +24,18 @@
 #include <avr/io.h>				// standard input/output functions
 #include <util/delay.h>			// include the use of the delay functions _delay_ms() and _delay_us()
 #include <avr/interrupt.h>		// this allows me to use interrupt functions
-#include "shift_out_24_PORTA_only.h"		// this gives us the function we need to utilize a shift register to shift OUT data.
+#include "shift_out_24_PORTA.h"		// this gives us the function we need to utilize a shift register to shift OUT data.
 
 //=================================================================
 // pin definitions
 //=================================================================
 
 // PORTB
-/*
-#define p_sweep				PORTB1		// this is the square wave signal that tells us what direction the laser is sweeping.
-										// The rising/falling edges tells us when it changes its sweep direction.
-*/
 #define p_freq_in			PORTB2		// Input digital signal (0 to 5V). We try to measure the frequency of this one.
 
 
 
 // PORTA
-/*
-#define p_linePosition		PORTA3		// this pin shows (in time) roughly where the BSI interprets the line to exist.
-#define p_dataReady			PORTA7		// this tells the master microcontroller that the analog signal from p_line is ready to be read.
-*/
-
 // OUTPUT SHIFT REGISTER pins:
 #define p_SR_data			PORTA3		// this pin holds the data that must be clocked into the shift register
 #define p_SR_RCK			PORTA4		// this pin updates the outputs of the shift register
@@ -88,8 +79,8 @@ uint32_t overflows = 0;
 uint16_t freq_in_cycles = 0;
 
 // these two variables record the state of the timer and overflow counter at the moment when 
-//uint16_t ON_time_timer = 12345;
-//volatile uint32_t ON_time_overflows = 0;
+//uint16_t OFF_time_timer = 12345;
+//volatile uint32_t OFF_time_overflows = 0;
 // this is updated with measurements of the input frequency
 double freq_in_measurement_Hz = 0;
 // this is updated with measurements of the duty cycle (%)
@@ -132,17 +123,29 @@ void init_timer0()
 // timer one will take care keeping track of time for measuring the line position.
 void init_timer1()
 {
-	
 	TCCR1B |= (1<<CS10);			// timer1 is clokced from the main clock (20 MHz)
 	
 	//TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
 	//TCNT1L = 0;						// "
 	
-	OCR1AH = 0xff;					// set high byte of the output compare register
-	OCR1AL = 0xff;					// set low  byte of the output compare register
+	//OCR1AH = 0xff;					// set high byte of the output compare register
+	//OCR1AL = 0xff;					// set low  byte of the output compare register
 	
-	TIMSK1 |= (1<<OCIE1A);			// enable the output-compare interrupt for register A
+	//TIMSK1 |= (1<<OCIE1A);			// enable the output-compare interrupt for register A
+	TIMSK1 |= (1<<TOIE1);				// enable overflow-interrupt enable of timer 1.
+}
+
+
+// enable and configure the input pin interrupts.
+void init_input_interrupts()
+{
+	// enable interrupts for port B pins (PCINT 11:8).
+	GIMSK |= (1<<PCIE1);
 	
+	// enable interrupts for PCINT 10 specifically.
+	// This corresponds to PORTB PB2 - ATtiny24A DIP package pin5.
+	// this interrupt will be triggered on a logical state change (rising/falling edge).
+	PCMSK1 |= (1<<PCINT10);
 }
 
 
@@ -168,10 +171,10 @@ ISR(PCINT1_vect)
 	// grab the state of the freq_in pin.
 	uint8_t freq_in_state = ( (portBdata & (1<<p_freq_in))  >> p_freq_in );
 	
-	// if the signal went high,
-	if( freq_in_state )
+	// if the signal went low,
+	if( !freq_in_state )
 	{
-		// record that the input signal DID, in fact, have a (possibly another) rising edge.
+		// record that the input signal DID, in fact, have a (possibly another) falling edge.
 		freq_in_cycles++;
 		
 		// if the current sample has been going for at least the number of cycles needed to get 1 ppm resolution,
@@ -185,16 +188,16 @@ ISR(PCINT1_vect)
 			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
 			// record the frequency
 			freq_in_measurement_Hz = freq_in_cycles/period_sec;
-			// calculate the ON_time in seconds
-			//double ON_time_sec = (ON_time_timer*clock_period_sec) + (ON_time_overflows*overflow_period_sec);
+			// calculate the OFF_time in seconds
+			//double OFF_time_sec = (OFF_time_timer*clock_period_sec) + (OFF_time_overflows*overflow_period_sec);
 			// record the duty cycle
-			//freq_in_duty_cycle = ON_time_sec/period_sec;
+			//freq_in_duty_cycle = OFF_time_sec/period_sec;
 				
 			// reset all variables (Timer1 was already reset above)
 			freq_in_cycles = 0;
 			overflows = 0;
-			//ON_time_timer = 0;
-			//ON_time_overflows = 0;
+			//OFF_time_timer = 0;
+			//OFF_time_overflows = 0;
 		}
 		
 	}
@@ -206,8 +209,8 @@ ISR(PCINT1_vect)
 		//-----------------------------------------------------------------
 		
 		// record when the digital signal went low
-		//ON_time_timer = currentTimer1;
-		//ON_time_overflows = overflows;
+		//OFF_time_timer = currentTimer1;
+		//OFF_time_overflows = overflows;
 		
 	}
 	
@@ -217,27 +220,12 @@ ISR(PCINT1_vect)
 
 // this function handles when the timer1 has a compare match.
 // mainly, this function simply handles changing the state of the device between warmup, active, and waiting
-ISR(TIM1_COMPA_vect)
+ISR(TIM1_OVF_vect)
 {
-	// reset the timer 1 count (high byte first)
-	//TCNT1H = 0;
-	//TCNT1L = 0;
 	// increment the counter that keeps track of how many times Timer1 has overflowed.
 	overflows++;
 }
 
-
-// enable and configure the input pin interrupts.
-void init_input_interrupts()
-{
-	// enable interrupts for port B pins (PCINT 11:8).
-	GIMSK |= (1<<PCIE1);
-	
-	// enable interrupts for PCINT 10 specifically.
-	// This corresponds to PORTB PB2 - ATtiny24A DIP package pin5.
-	// this interrupt will be triggered on a logical state change (rising/falling edge).
-	PCMSK1 |= (1<<PCINT10);
-}
 
 
 // this is where the program starts
