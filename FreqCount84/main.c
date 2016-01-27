@@ -67,6 +67,42 @@
 
 
 //=================================================================
+// Shift register output pins guide
+//=================================================================
+// The shift register is serial-in parallel-out.
+// The shift register is 24 bits long.
+// Q0 is the first output of the shift register
+// Q23 is the last output of the shift register
+/*
+	Q0		seven-segment A  anode for all digits
+	Q1		seven-segment B  anode for all digits
+	Q2		seven-segment C  anode for all digits
+	Q3		seven-segment D  anode for all digits
+	Q4		seven-segment E  anode for all digits
+	Q5		seven-segment F  anode for all digits
+	Q6		seven-segment G  anode for all digits
+	Q7		seven-segment DP anode for all digits
+	
+	Q8		unit indicator	MegaHertz
+	Q9		unit indicator	Hertz
+	Q10		unit indicator	seconds
+	Q11		unit indicator	days
+	Q12		
+	Q13		
+	Q14		
+	Q15		
+	
+	Q16		digit 0	-	transistor pulling digit 0's common cathode low
+	Q17		digit 1	-	transistor pulling digit 1's common cathode low
+	Q18		digit 2	-	transistor pulling digit 2's common cathode low
+	Q19		digit 3	-	transistor pulling digit 3's common cathode low
+	Q20		digit 4	-	transistor pulling digit 4's common cathode low
+	Q21		digit 5	-	transistor pulling digit 5's common cathode low
+	Q22		
+	Q23		
+*/
+
+//=================================================================
 // variable declaration and numerical definitions
 //=================================================================
 
