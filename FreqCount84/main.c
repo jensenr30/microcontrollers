@@ -92,12 +92,12 @@
 	Q14		
 	Q15		
 	
-	Q16		digit 0	-	transistor pulling digit 0's common cathode low
+	Q16		digit 0	-	transistor pulling digit 0's common cathode low (most  significant digit) (left-most  digit)
 	Q17		digit 1	-	transistor pulling digit 1's common cathode low
 	Q18		digit 2	-	transistor pulling digit 2's common cathode low
 	Q19		digit 3	-	transistor pulling digit 3's common cathode low
 	Q20		digit 4	-	transistor pulling digit 4's common cathode low
-	Q21		digit 5	-	transistor pulling digit 5's common cathode low
+	Q21		digit 5	-	transistor pulling digit 5's common cathode low (least significant digit) (right-most digit)
 	Q22		
 	Q23		
 */
