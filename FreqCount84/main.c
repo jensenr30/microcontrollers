@@ -85,8 +85,8 @@
 	
 	Q8		unit indicator	MegaHertz
 	Q9		unit indicator	Hertz
-	Q10		unit indicator	seconds
-	Q11		unit indicator	days
+	Q10		unit indicator	Seconds
+	Q11		unit indicator	Minutes
 	Q12		
 	Q13		
 	Q14		
@@ -102,12 +102,30 @@
 	Q23		
 */
 
+
 //=================================================================
-// variable declaration and numerical definitions
+// numerical definitions
+//=================================================================
+
+// this is how many digits the display has
+#define NUMBER_OF_DIGITS (6)
+// this is how long each digit is displayed for (units of milliseconds)
+#define DIGIT_DISPLAY_PERIOD (2)
+// this indicates the value that should be used to indicate that the first significant figure has not been found yet.
+// this is not arbitrary. It has to be greater than the number of significant figures you would ever expect to support.
+#define FIRST_SIGFIG_NOT_FOUND_YET ((uint8_t)255)
+
+// this describes where to start the search for the first significant figure.
+// this is based on how many digits you have
+// in general, if you have an N-digit display, you should make your decade start 10^(N-1) for peak efficiency.
+# define DECADE_START ((double)10e5)
+
+//=================================================================
+// variable declaration and 
 //=================================================================
 
 // this keeps track of whether or not the counter has been triggered for the first time.
-//volatile uint8_t triggered = 0;
+uint8_t triggered = 0;
 // this keeps track of how many times Timer1 has overflowed.
 // with a clock frequency of 20 MHz, a 16-bit timer, and a 32-bit overflow counter, this program should be able to count periods as long as 162 days.
 uint32_t overflows = 0;
@@ -119,6 +137,8 @@ uint16_t freq_in_cycles = 0;
 //volatile uint32_t OFF_time_overflows = 0;
 // this is updated with measurements of the input frequency
 double freq_in_measurement_Hz = 0;
+// this is the calcualted period based on the frequency 
+double period_measurement_s = 0;
 // this is updated with measurements of the duty cycle (%)
 //volatile double freq_in_duty_cycle = 0;
 
@@ -210,6 +230,7 @@ ISR(PCINT1_vect)
 	// if the signal went low,
 	if( !freq_in_state )
 	{
+		triggered = 1;
 		// record that the input signal DID, in fact, have a (possibly another) falling edge.
 		freq_in_cycles++;
 		
@@ -224,6 +245,8 @@ ISR(PCINT1_vect)
 			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
 			// record the frequency
 			freq_in_measurement_Hz = freq_in_cycles/period_sec;
+			// calculate the period
+			period_measurement_s = 1/freq_in_measurement_Hz;
 			// calculate the OFF_time in seconds
 			//double OFF_time_sec = (OFF_time_timer*clock_period_sec) + (OFF_time_overflows*overflow_period_sec);
 			// record the duty cycle
@@ -277,76 +300,158 @@ int main(void)
 	set_output(DDRA, p_SR_data);
 	set_output(DDRA, p_SR_SCK);
 	set_output(DDRA, p_SR_RCK);
-	// set the intial values of these pins
-	//low(PORTA, p_SR_data);
-	//low(PORTA, p_SR_SCK);
-	//low(PORTA, p_SR_RCK);
+	// set the initial values of these pins
+	low(PORTA, p_SR_data);
+	low(PORTA, p_SR_SCK);
+	low(PORTA, p_SR_RCK);
 	
 	// set up timers and interrupts
 	sei();								// enable global interrupts
 	init_timer1();						// initialize timer1
 	init_input_interrupts();			// initialize input interrupts
+
+	uint8_t sigfig = FIRST_SIGFIG_NOT_FOUND_YET;	// records which significant figure of the number we are currently processing
+	uint8_t stopEncoding = 0;			// this keeps track of when to stop encoding the number from double into seven-segment format
+	uint16_t digit = 0;					// keeps track of which digit is currently being displayed
+	uint16_t s = 0;						// keeps track of which segment is being displayed (only used in the startup/debug screen)
+	uint16_t unit = 0;					// tells us which unit indicator we should light.
+										// 0 = Megahertz
+										// 1 = Hertz
+										// 2 = Seconds
+										// 3 = Minutes
 	
-	// the main() function only serves to setup the program. everything happens based on interrupts, so our work in the main() function is done. we can kick back
+	double currentFreq = 0;				// this keeps track of the current frequency that will be displayed
+	double currentPeriod = 0;			// this keeps track of the current period    that will be displayed
+	double dispNumber = 0;				// this keeps track of what number we want to display (frequency/period gets shoved in here and the number gets encoded for the 7-segment display the same way in both cases.)
+	
+	//-----------------------------------------------------------------
+	// the LED displays are handled in this while loop.
+	//-----------------------------------------------------------------
 	while(1)
     {
-		// check if we are starting a new frame (a new set of six display digits)
-		if(digit >= 6)
+		if(triggered)
 		{
-			digit = 0;
-			double decade;
-			
-			// grab the current frequency measurement
-			double currentFreq = freq_in_measurement_Hz;
-			
-			// records which significant figure of the number we are currently processing
-			// default is a bogus value
-			int8_t sigfig = 99;
-			for(decade = 10e6; decade >= 1e-6; decade/=10.0)
+			// check if we are starting a new frame (a new set of six display digits)
+			if(digit >= NUMBER_OF_DIGITS)
 			{
-				// if you have found the first significant digit,
-				if(currentFreq >= decade && sigfig == 99)
+				digit = 0;
+				double decade;
+			
+				// grab the current frequency and period
+				currentFreq = freq_in_measurement_Hz;
+				currentPeriod = period_measurement_s;
+				
+				// determine what unit we want to use
+				if     (currentFreq >= 1e6)
 				{
-					// start processing the number into 
-					sigfig = 0;
+					unit = 0;							// use units of MHz
+					dispNumber = currentFreq/1.0e6;		// display MHz
 				}
-				// if you have found at least the first significant digit,
-				if(sigfig <= 5)
+				else if(currentFreq >= 1)
 				{
-					// record what this digit was by putting it in the disp_data
-					disp_data[sigfig] = (uint8_t)(currentFreq/decade);
-					// subtract the digit that has already been accounted for
-					currentFreq -= (double)disp_data[sigfig]*decade;
-					// replace the digit with the data that will produce a digit on the seven segment display
-					disp_data[sigfig] = sevenseg[disp_data[sigfig]];
-					// if this is the ones place,
-					if(decade == 1)
-					{
-						// add the decimal place
-						disp_data[sigfig] |= 0x80;
-					}
-					// increment the sigfig
-					sigfig++;
+					unit = 1;							// use units of Hz
+					dispNumber = currentFreq;			// display hertz
+				}
+				else if(currentPeriod <= 60)
+				{
+					unit = 2;							// use units of Seconds
+					dispNumber = currentPeriod;			// display seconds
+				}
+				else
+				{
+					unit = 3;							// use units of Minutes
+					dispNumber = currentPeriod/60.0;	// display minutes
 				}
 				
+				// default is a bogus value to indicate that the first significant figure has not been found yet
+				sigfig = FIRST_SIGFIG_NOT_FOUND_YET;
+				// make sure the for loop starts encoding
+				stopEncoding = 0;
+				for(decade = DECADE_START; !stopEncoding; decade/=10.0)
+				{
+					// if you have found the first significant digit,
+					if(dispNumber >= decade && sigfig == FIRST_SIGFIG_NOT_FOUND_YET)
+					{
+						// start processing the number into 
+						sigfig = 0;
+					}
+					// if you have found at least the first significant digit,
+					if(sigfig < NUMBER_OF_DIGITS)
+					{
+						// record what this digit was by putting it in the disp_data
+						disp_data[sigfig] = (uint8_t)(dispNumber/decade);
+						// subtract the digit that has already been accounted for
+						dispNumber -= (double)disp_data[sigfig]*decade;
+						// replace the digit with the data that will produce a digit on the seven segment display
+						disp_data[sigfig] = sevenseg[disp_data[sigfig]];
+						// if this is the ones place,
+						if(decade == 1)
+						{
+							// add the decimal place
+							disp_data[sigfig] |= 0x80;
+						}
+						// increment the sigfig
+						sigfig++;
+						// 
+						stopEncoding = 1;
+					}
+				
+				}
 			}
+			
+			
+			// select the digit you want to display
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, 1<<digit, 'm');
+			// select the unit LED indicator you want to light
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, 1<<unit, 'm');
+			// shift out the data for the current digit of the seven-segment display
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, disp_data[digit], 'm');
+			
+			// update the output registers
+			low(PORTA,p_SR_RCK);
+			high(PORTA,p_SR_RCK);
+			
+			// this sets (roughly) the refresh rate of the display.
+			_delay_ms(DIGIT_DISPLAY_PERIOD);
+			
+			// We have just displayed a digit. It is time to
+			digit++;
 		}
 		
-		// debugging the shift register chain
-		//if(data) data <<= 1;
-		//if(data >= ((uint32_t)1 << 6)) data = 1;
-		//if(data == 0) data = 1;
-		
-		// build data and shift it into the registers
-		shift_out_24_PORTA(p_SR_SCK, p_SR_data, 16, ((uint16_t)1<<(digit+8))|(uint16_t)disp_data[digit], 'm');
-		
-		// update the output registers
-		low(PORTA,p_SR_RCK);
-		high(PORTA,p_SR_RCK);
-		_delay_ms(2);
-		
-		// We have just displayed a digit. It is time to 
-		digit++;
+		// if you have not triggered yet,
+		// (this is basically just something to do when the unit first starts up)
+		else
+		{
+			// limit s to the number of segments
+			if(s >= 8){
+				s = 0;
+				// when the segment overflows, increment the digit
+				digit++;
+			}
+			// limit d to the number of digits
+			if(digit >= 6){
+				digit = 0;
+				// when the digit overflows, increment the unit
+				unit++;
+			}
+			// limit u to the number of units
+			if(unit >= 4){
+				unit = 0;
+			}
+			
+			// shift out some debugging info
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<digit, 'm');		// shift out the digit   data
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<unit, 'm');		// shift out the unit    data
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<s, 'm');		// shift out the segment data
+			
+			// update the output registers
+			low(PORTA,p_SR_RCK);
+			high(PORTA,p_SR_RCK);
+			_delay_ms(50);
+			
+			// increment the segment counter
+			s++;
+		}
 	}
 }
 
