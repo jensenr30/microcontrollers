@@ -392,7 +392,12 @@ int main(void)
 						}
 						// increment the sigfig
 						sigfig++;
-						// 
+					}
+					
+					// If you have encoded the necessary number of digits,
+					if(sigfig == NUMBER_OF_DIGITS)
+					{
+						// quit encoding digits
 						stopEncoding = 1;
 					}
 				
