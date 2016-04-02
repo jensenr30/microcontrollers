@@ -36,10 +36,18 @@
 
 
 // PORTA
+// Demultiplexer output pins
+//#define p_DEMUX_0 PORTA0				// these three pins control an 3-to 
+//#define p_DEMUX_1 PORTA1
+//#define p_DEMUX_2 PORTA2
+
 // OUTPUT SHIFT REGISTER pins:
 #define p_SR_data			PORTA3		// this pin holds the data that must be clocked into the shift register
 #define p_SR_RCK			PORTA4		// this pin updates the outputs of the shift register
 #define p_SR_SCK			PORTA5		// this pin clocks data into the shift register
+
+#define freq_div_bits 3					// there are three bits in the output shift register that are used for selecting the frequency division.
+#define freq_div_bit_mask ( (1<freq_div_bits) - 1)
 
 // this is how many seconds are contained in one clock cycle
 #define clock_period_sec ( 1/(double)F_CPU )
@@ -87,9 +95,9 @@
 	Q9		unit indicator	Hertz
 	Q10		unit indicator	Seconds
 	Q11		unit indicator	Minutes
-	Q12		
-	Q13		
-	Q14		
+	Q12		frequency division selection 0
+	Q13		frequency division selection 1
+	Q14		frequency division selection 2
 	Q15		
 	
 	Q16		digit 0	-	transistor pulling digit 0's common cathode low (most  significant digit) (left-most  digit)
@@ -125,12 +133,29 @@
 //=================================================================
 
 // this keeps track of whether or not the counter has been triggered for the first time.
+// when the counter decides that it needs to change the frequency division, this will be reset to 0.
 uint8_t triggered = 0;
 // this keeps track of how many times Timer1 has overflowed.
 // with a clock frequency of 20 MHz, a 16-bit timer, and a 32-bit overflow counter, this program should be able to count periods as long as 162 days.
 uint32_t overflows = 0;
 // this records how many cycles (periods) have occurred on the p_freq_in pin.
 uint16_t freq_in_cycles = 0;
+// this specifies how to divide the input frequency
+// the amount that the frequency will be divided before being presented at the input of the ATtiny84 is given as:
+// freq_meas = freq_in / ( 2 ^ (2*freq_div) );
+// This is a table of valid values for freq_div:
+//=======================================================
+//	setting	| division  |	division (alternate form)
+//==========|===========|================================
+//	0		|	1		|	2^0		(no division)
+//	1		|	4		|	2^2
+//	2		|	16		|	2^4
+//	3		|	64		|	2^6
+//	4		|	256		|	2^8
+//	5		|	1024	|	2^10
+//	6		|	4096	|	2^12
+//	> 6		|	4096	|	2^12	(max division from the 74**4040)
+uint8_t freq_div = 0;
 
 // these two variables record the state of the timer and overflow counter at the moment when 
 //uint16_t OFF_time_timer = 12345;
@@ -199,13 +224,13 @@ void init_input_interrupts()
 	GIMSK |= (1<<PCIE1);
 	
 	// enable interrupts for PCINT 10 specifically.
-	// This corresponds to PORTB PB2 - ATtiny24A DIP package pin5.
+	// This corresponds to PORTB PB2 - ATtiny84 DIP package pin5.
 	// this interrupt will be triggered on a logical state change (rising/falling edge).
 	PCMSK1 |= (1<<PCINT10);
 }
 
 
-// this handles when either of the two input pins changes states
+// this handles when freq_meas changes state
 ISR(PCINT1_vect)
 {
 	//-----------------------------------------------------------------
@@ -406,11 +431,13 @@ int main(void)
 			
 			
 			// select the digit you want to display
-			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, 1<<digit, 'm');
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, 1<<digit,			'm');
+			// select what division factor you want to apply to the input signal before it is applied to the ATtiny84.
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 4, freq_div,			'm');
 			// select the unit LED indicator you want to light
-			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, 1<<unit, 'm');
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 4, 1<<unit,				'm');
 			// shift out the data for the current digit of the seven-segment display
-			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, disp_data[digit], 'm');
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, disp_data[digit],	'm');
 			
 			// update the output registers
 			low(PORTA,p_SR_RCK);
@@ -422,6 +449,7 @@ int main(void)
 			// We have just displayed a digit. It is time to
 			digit++;
 		}
+		
 		
 		// if you have not triggered yet,
 		// (this is basically just something to do when the unit first starts up)
@@ -444,10 +472,13 @@ int main(void)
 				unit = 0;
 			}
 			
-			// shift out some debugging info
-			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<digit, 'm');		// shift out the digit   data
-			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<unit, 'm');		// shift out the unit    data
-			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<s, 'm');		// shift out the segment data
+			// shift out data that controls everything
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 2, 0,						'm');	// shift out two empty bits
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 6, (uint16_t)1<<digit,		'm');	// shift out the digit   data
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 1, 0,						'm');	// shift out one empty bit
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 3, (uint16_t)freq_div,		'm');	// shift out the frequency division data
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 4, (uint16_t)1<<unit,		'm');	// shift out the unit    data
+			shift_out_24_PORTA(p_SR_SCK, p_SR_data, 8, (uint16_t)1<<s,			'm');	// shift out the segment data
 			
 			// update the output registers
 			low(PORTA,p_SR_RCK);

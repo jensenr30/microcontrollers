@@ -1,0 +1,2 @@
+Find the schematic at 
+https://github.com/jensenr30/Eagle/tree/master/FreqCount84

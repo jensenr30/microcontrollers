@@ -1,0 +1,40 @@
+Characterization of FreqCount84
+A 32.768 kHz 4060 circuit was built.
+Different outputs were measured using FreqCount84.
+It is assumed that the different outputs are related to each other by EXACTLY powers of 2.
+Additionally, a 4040 was connected to the output of the 4060 to measure lower frequencies (that should also be related by EXACTLY powers of 2).
+The weird thing is that the readings were not related to each other by exact factors of 2.
+To me, this indicated that my program was calculating the frequency incorrectly.
+I looked at my code to see what I could see.
+This document describes what I think the problem is.
+
+There is another document,  "Frequency Measurement Error 2016-04-02.ods" which contains all of my measurements.
+
+
+
+HYPOTHESIS: PROBLEM WITH THE CODE:
+
+In "ISR(PCINT1_vect)"
+
+I have doubts about resetting the timer 1 SO LONG after the PCINT1 interrupt routine has been called.
+I don't know how much time has elapsed between the beginning of the function call and the time at which these lines are executed:
+	
+	// start your next sample by resetting Timer1.
+	TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
+	TCNT1L = 0;						// "
+	
+It seems that perhaps the TCNT1 register should be restarte to some minimum value.
+I would do this to compensate for the (currently ignored) time between the beginning of ISR(PCINT1_vect) and the time when timer1 is reset.
+Based on the calculations I have performed in "Frequency Measurement Error 2016-04-02.ods",
+I believe amount of time that is missing from each measurement period is roughly
+	1.9 microseconds.
+which equates to about
+	38 clock cycles
+that are missing from each measurement period.
+Therefore, I should force the TCNT1 register to reset to 38 counts rather than 0.
+This should compensate for the lost time that I believe to exist.
+
+Ryan Jensen
+2016-04-02
+Waseca, MN USA
+Saturday Afternoon
