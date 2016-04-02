@@ -54,13 +54,22 @@
 // this is how many seconds are contained in one overflow value (if the overflow value is 1, this is how many seconds it took to reach that overflow value of 1).
 #define overflow_period_sec ( (0x10000) / (double)F_CPU )
 
-// this tells us how many clock cycles (from the 20 MHz clock) must pass before we can make a measurement with no more than 1 ppm error.
-// the maximum rate at which this will measure frequency is 40 Hz (it will take a frequency measurement no more than 40 times every second).
-#define min_clock_cycles_1ppm ( (uint32_t)500000 )
+
+// this set the target number of clock cycles to find before calculating the frequency.
+#define min_clock_cycles_for_freq_calc ( (uint32_t)1000000 )		// 20 Hz period
 
 // this is the max value of timer1
 #define timer1_TOP ((uint16_t)0xffff)
 
+// this is the reset value of timer1.
+// this should IDEALLY be 0, but because doing calculations takes some time out of the measurement period,
+// I need to start the timer off with the right number of counts to make up for the lost time
+// in doing a few calculations.
+// the extra counts equate to some number of microseconds offset.
+// this starts the counter with 38 counts already in it. This equates to 1.9 microseconds at 20 MHz.
+// NOTE:
+#define TCNT1H_reset (0)
+#define TCNT1L_reset (38)		
 
 //=================================================================
 // function definitions
@@ -204,7 +213,7 @@ void init_timer0()
 // timer one will take care keeping track of time for measuring the line position.
 void init_timer1()
 {
-	TCCR1B |= (1<<CS10);			// timer1 is clokced from the main clock (20 MHz)
+	TCCR1B |= (1<<CS10);				// timer1 is clocked from the main clock (20 MHz)
 	
 	//TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
 	//TCNT1L = 0;						// "
@@ -260,11 +269,11 @@ ISR(PCINT1_vect)
 		freq_in_cycles++;
 		
 		// if the current sample has been going for at least the number of cycles needed to get 1 ppm resolution,
-		if( ((uint32_t)overflows<<16) + (uint16_t)currentTimer1 >= min_clock_cycles_1ppm)
+		if( ((uint32_t)overflows<<16) + (uint16_t)currentTimer1 >= min_clock_cycles_for_freq_calc)
 		{	
 			// start your next sample by resetting Timer1.
-			TCNT1H = 0;						// reset the timer1 count (both the high and low bytes)
-			TCNT1L = 0;						// "
+			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
+			TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
 				
 			// calculate the period over which this sampled was performed.
 			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
