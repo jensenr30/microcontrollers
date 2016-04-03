@@ -298,7 +298,7 @@ ISR(PCINT1_vect)
 		
 		// if the current sample has been going for the necessary amount of time
 		// (or if the frequency division settings were just changed)
-		if( timer1_cycles >= min_clock_cycles_for_freq_calc || (adjustingFreqDiv == 1) )
+		if( timer1_cycles >= min_clock_cycles_for_freq_calc )
 		{
 			// start your next sample by resetting Timer1.
 			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
@@ -320,20 +320,12 @@ ISR(PCINT1_vect)
 			overflows = 0;
 			//OFF_time_timer = 0;
 			//OFF_time_overflows = 0;
+			
+			//if()
+			
 		}
 		
-		// if the frequency division settings were just changed,
-		if(adjustingFreqDiv == 1)
-		{
-			// record that the next measurement will be valid
-			adjustingFreqDiv = 2;
-		}
-		// if the current measurement was supposed to be a valid one
-		else if(adjustingFreqDiv == 2)
-		{
-			// record that this measurement was made without changing the frequency division settings.
-			adjustingFreqDiv = 0;
-		}
+		
 		
 	}
 	else
@@ -421,33 +413,9 @@ int main(void)
 				digit = 0;
 				double decade;
 				
-				
-				// if the last frequency measurement was done without any change in frequency division setting
-				if(adjustingFreqDiv == 0)
-				{
-					
-					// grab the current frequency and period
-					currentFreqIn =   freq_meas_Hz  * (double)( (uint32_t)1 << 2*freq_div );
-					currentPeriodIn = period_meas_s / (double)( (uint32_t)1 << 2*freq_div );
-				
-					// if the frequency applied to the ATtiny84 is too high,
-					if( (freq_meas_Hz > freq_meas_max) && (freq_div < freq_div_max) )
-					{
-						// try to decrease freq-meas (increase the frequency division)
-						freq_div++;
-						// record that you are adjusting frequency division settings.
-						adjustingFreqDiv = 1;
-					}
-				
-					// if timer1 has overflowed,
-					if( overflows && (freq_div > 0) )
-					{
-						// try to increase freq-meas (decrease the frequency division)
-						freq_div--;
-						// record that you are adjusting frequency division settings.
-						adjustingFreqDiv = 1;
-					}
-				}
+				// grab the current frequency and period
+				currentFreqIn =   freq_meas_Hz  * (double)( (uint32_t)1 << 2*freq_div );
+				currentPeriodIn = period_meas_s / (double)( (uint32_t)1 << 2*freq_div );
 				
 				// determine what unit we want to use
 				if     (currentFreqIn >= 1e6)
