@@ -64,7 +64,10 @@
 
 
 // this set the target number of clock cycles to find before calculating the input frequency.
-#define min_clock_cycles_for_freq_calc ( (uint32_t)1000000 )		// 20 Hz measurement period
+#define freq_calc_min_clock_cycles ( (uint32_t)500000 )		// 40 Hz measurement period (1ppm resolution)
+// this is the maximum frequency at which the device will measure frequency.
+// this limits the speed at which frequency measurements can be taken
+#define freq_calc_max_freq ( (double)F_CPU/(double)freq_calc_min_clock_cycles )
 
 // this is the max value of timer1
 #define timer1_TOP ((uint16_t)0xffff)
@@ -192,7 +195,8 @@ uint8_t freq_div = 0;
 // the device will tolerate frequencies higher than this, but the display operation will suffer past the 35 kHz mark.
 // therefore, the frequency input should be divided down to something below this max setting.
 #define freq_meas_max ( (double) 10e3 )		// if the frequency applied to the input of the device goes  above this frequency, the freq-div should be increased.
-// the minimum frequency division is set just by checking if timer1 has overflowed.
+#define overflows_max ( (uint32_t) 2*freq_calc_max_freq ) // if the program ever has more than this many overflows, the frequency division should be decreased.
+											// note: the number of overflows is chosen as twice as many as the maximum measurement frequency to ensure things are stable.
 
 //-----------------------------------------------------------------
 // these variables keep track of the frequency measured at the ATtiny84 input pin.
@@ -284,6 +288,21 @@ ISR(TIM1_OVF_vect)
 	// TODO: remove this little debugging thingy
 	toggle(PORTA, p_debug);
 	
+	// if the number of overflows goes above what should be allowed,
+	// AND if the frequency division CAN be decreased
+	if( (overflows >= overflows_max) && (freq_div > 0) )
+	{
+		// decrease the frequency division
+		freq_div--;
+		
+		// reset the frequency measurement variables
+		// this basically aborts the current frequency measurement and prepares to do another one.
+		TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
+		TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
+		freq_in_cycles = 0;
+		overflows = 0;
+	}
+	
 }
 
 
@@ -322,7 +341,7 @@ ISR(PCINT1_vect)
 		
 		// if the current sample has been going for the necessary amount of time
 		// (or if the frequency division settings were just changed)
-		if( timer1_cycles >= min_clock_cycles_for_freq_calc )
+		if( timer1_cycles >= freq_calc_min_clock_cycles )
 		{
 			// start your next sample by resetting Timer1.
 			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
