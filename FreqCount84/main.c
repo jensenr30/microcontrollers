@@ -190,12 +190,14 @@ uint16_t freq_in_cycles = 0;
 uint8_t freq_div = 0;
 // this is the maximum valid frequency division setting
 #define freq_div_max ((uint8_t)6)
+#define freq_div_min ((uint8_t)0)
 
 // this is the maximum frequency that *should* be applied to the ATtiny84A.
 // the device will tolerate frequencies higher than this, but the display operation will suffer past the 35 kHz mark.
 // therefore, the frequency input should be divided down to something below this max setting.
-#define freq_meas_max ( (double) 10e3 )		// if the frequency applied to the input of the device goes  above this frequency, the freq-div should be increased.
-#define overflows_max ( (uint32_t) 2*freq_calc_max_freq ) // if the program ever has more than this many overflows, the frequency division should be decreased.
+#define freq_meas_max	( (double) 10e3 )		// if the frequency applied to the input of the ATtiny84 goes above this frequency, the freq-div should be increased.
+#define freq_meas_min	( (double) 1e3  )		// if the frequency applied to the input of the ATtiny84 goes below this frequency, the freq-div should be decreased.
+#define overflows_max	( (uint32_t) 2*freq_calc_max_freq ) // if the program ever has more than this many overflows, the frequency division should be decreased.
 											// note: the number of overflows is chosen as twice as many as the maximum measurement frequency to ensure things are stable.
 
 //-----------------------------------------------------------------
@@ -290,7 +292,7 @@ ISR(TIM1_OVF_vect)
 	
 	// if the number of overflows goes above what should be allowed,
 	// AND if the frequency division CAN be decreased
-	if( (overflows >= overflows_max) && (freq_div > 0) )
+	if( (overflows >= overflows_max) && (freq_div > freq_div_min) )
 	{
 		// decrease the frequency division
 		freq_div--;
@@ -364,13 +366,19 @@ ISR(PCINT1_vect)
 			//OFF_time_timer = 0;
 			//OFF_time_overflows = 0;
 			
-			// if the frequency that was just measured is greater than the max frequency you would ever like to see at the input of the ATtiny84,
-			if(freq_meas_Hz > freq_meas_max)
+			// if the frequency that was just measured is greater than the max frequency you would like to see at the input of the ATtiny84,
+			// AND the freq_div CAN be increased
+			if(freq_meas_Hz > freq_meas_max && freq_div < freq_div_max)
 			{
 				// attempt to lower it
 				freq_div++;
-				// limit the freq_div setting
-				if(freq_div > freq_div_max) freq_div = freq_div_max;
+			}
+			// if the frequency that was just measured is less than the min frequency you would like to see at the input of the ATtiny84,
+			// AND the freq_div CAN be decreased
+			if(freq_meas_Hz < freq_meas_min && freq_div > freq_div_min)
+			{
+				// attempt to lower it
+				freq_div--;
 			}
 			
 			
