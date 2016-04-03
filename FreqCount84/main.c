@@ -321,7 +321,15 @@ ISR(PCINT1_vect)
 			//OFF_time_timer = 0;
 			//OFF_time_overflows = 0;
 			
-			//if()
+			// if the frequency that was just measured is greater than the max frequency you would ever like to see at the input of the ATtiny84,
+			if(freq_meas_Hz > freq_meas_max)
+			{
+				// attempt to lower it
+				freq_div++;
+				// limit the freq_div setting
+				if(freq_div > freq_div_max) freq_div = freq_div_max;
+			}
+			
 			
 		}
 		
