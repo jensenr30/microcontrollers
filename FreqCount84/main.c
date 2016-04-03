@@ -55,8 +55,8 @@
 #define overflow_period_sec ( (0x10000) / (double)F_CPU )
 
 
-// this set the target number of clock cycles to find before calculating the frequency.
-#define min_clock_cycles_for_freq_calc ( (uint32_t)1000000 )		// 20 Hz period
+// this set the target number of clock cycles to find before calculating the input frequency.
+#define min_clock_cycles_for_freq_calc ( (uint32_t)1000000 )		// 20 Hz measurement period
 
 // this is the max value of timer1
 #define timer1_TOP ((uint16_t)0xffff)
@@ -69,7 +69,7 @@
 // this starts the counter with 38 counts already in it. This equates to 1.9 microseconds at 20 MHz.
 // NOTE:
 #define TCNT1H_reset (0)
-#define TCNT1L_reset (38)		
+#define TCNT1L_reset (38)
 
 //=================================================================
 // function definitions
@@ -137,13 +137,22 @@
 // in general, if you have an N-digit display, you should make your decade start 10^(N-1) for peak efficiency.
 # define DECADE_START ((double)10e5)
 
+
 //=================================================================
-// variable declaration and 
+// variable declaration
 //=================================================================
 
 // this keeps track of whether or not the counter has been triggered for the first time.
 // when the counter decides that it needs to change the frequency division, this will be reset to 0.
+uint8_t startUp = 1;
+// this keeps track of whether or not the device has been triggered at least once using the latest frequency division settings.
 uint8_t triggered = 0;
+// this keeps track of whether or not the frequency division settings have been changed during the current measurement period.
+// 0 indicates	the current measurement is valid and has been made with no change to the frequency division settings.
+// 1 indicates	the current measurement is invalid because the frequency division settings were just changed.
+// 2 indicates	a measurement is being performed that WILL be valid when it is complete.
+uint8_t adjustingFreqDiv = 0;
+
 // this keeps track of how many times Timer1 has overflowed.
 // with a clock frequency of 20 MHz, a 16-bit timer, and a 32-bit overflow counter, this program should be able to count periods as long as 162 days.
 uint32_t overflows = 0;
@@ -165,14 +174,29 @@ uint16_t freq_in_cycles = 0;
 //	6		|	4096	|	2^12
 //	> 6		|	4096	|	2^12	(max division from the 74**4040)
 uint8_t freq_div = 0;
+// this is the maximum valid frequency division setting
+#define freq_div_max ((uint8_t)6)
 
+// this is the maximum frequency that *should* be applied to the ATtiny84A.
+// the device will tolerate frequencies higher than this, but the display operation will suffer past the 35 kHz mark.
+// therefore, the frequency input should be divided down to something below this max setting.
+#define freq_meas_max ( (double) 10e3 )		// if the frequency applied to the input of the device goes  above this frequency, the freq-div should be increased.
+// the minimum frequency division is set just by checking if timer1 has overflowed.
+
+//-----------------------------------------------------------------
+// these variables keep track of the frequency measured at the ATtiny84 input pin.
+// NOTE: this may not be the actual frequency! This could be a divided-down version of the input frequency.
+// the "real" frequency that we want to measure is the frequency that is being applied to the input of the binary counter.
+// this program controls the frequency division (see above).
+// from the frequency division settings, the real input frequency is calculated.
+//-----------------------------------------------------------------
 // these two variables record the state of the timer and overflow counter at the moment when 
 //uint16_t OFF_time_timer = 12345;
 //volatile uint32_t OFF_time_overflows = 0;
 // this is updated with measurements of the input frequency
-double freq_in_measurement_Hz = 0;
-// this is the calcualted period based on the frequency 
-double period_measurement_s = 0;
+double freq_meas_Hz = 0;
+// this is the calculated period based on the freq_meas_Hz 
+double period_meas_s = 0;
 // this is updated with measurements of the duty cycle (%)
 //volatile double freq_in_duty_cycle = 0;
 
@@ -253,6 +277,7 @@ ISR(PCINT1_vect)
 	// read from low byte then add the high byte (low byte first)
 	uint16_t currentTimer1 = TCNT1L;
 	currentTimer1 += TCNT1H<<8;
+	uint16_t currentOverflows = overflows;
 	
 	//-----------------------------------------------------------------
 	// Next up: figure out what the state of the pin is
@@ -268,19 +293,23 @@ ISR(PCINT1_vect)
 		// record that the input signal DID, in fact, have a (possibly another) falling edge.
 		freq_in_cycles++;
 		
-		// if the current sample has been going for at least the number of cycles needed to get 1 ppm resolution,
-		if( ((uint32_t)overflows<<16) + (uint16_t)currentTimer1 >= min_clock_cycles_for_freq_calc)
-		{	
+		// calculate the number of cycles that have taken place since the beginning of the measurement period
+		uint32_t timer1_cycles = ((uint32_t)currentOverflows<<16) + (uint32_t)currentTimer1;
+		
+		// if the current sample has been going for the necessary amount of time
+		// (or if the frequency division settings were just changed)
+		if( timer1_cycles >= min_clock_cycles_for_freq_calc || (adjustingFreqDiv == 1) )
+		{
 			// start your next sample by resetting Timer1.
 			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
 			TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
-				
+			
 			// calculate the period over which this sampled was performed.
 			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
 			// record the frequency
-			freq_in_measurement_Hz = freq_in_cycles/period_sec;
+			freq_meas_Hz = freq_in_cycles/period_sec;
 			// calculate the period
-			period_measurement_s = 1/freq_in_measurement_Hz;
+			period_meas_s = 1/freq_meas_Hz;
 			// calculate the OFF_time in seconds
 			//double OFF_time_sec = (OFF_time_timer*clock_period_sec) + (OFF_time_overflows*overflow_period_sec);
 			// record the duty cycle
@@ -291,6 +320,19 @@ ISR(PCINT1_vect)
 			overflows = 0;
 			//OFF_time_timer = 0;
 			//OFF_time_overflows = 0;
+		}
+		
+		// if the frequency division settings were just changed,
+		if(adjustingFreqDiv == 1)
+		{
+			// record that the next measurement will be valid
+			adjustingFreqDiv = 2;
+		}
+		// if the current measurement was supposed to be a valid one
+		else if(adjustingFreqDiv == 2)
+		{
+			// record that this measurement was made without changing the frequency division settings.
+			adjustingFreqDiv = 0;
 		}
 		
 	}
@@ -354,47 +396,79 @@ int main(void)
 										// 2 = Seconds
 										// 3 = Minutes
 	
-	double currentFreq = 0;				// this keeps track of the current frequency that will be displayed
-	double currentPeriod = 0;			// this keeps track of the current period    that will be displayed
+	double currentFreqIn = 0;				// this keeps track of the current frequency that will be displayed
+	double currentPeriodIn = 0;			// this keeps track of the current period    that will be displayed
 	double dispNumber = 0;				// this keeps track of what number we want to display (frequency/period gets shoved in here and the number gets encoded for the 7-segment display the same way in both cases.)
+	
 	
 	//-----------------------------------------------------------------
 	// the LED displays are handled in this while loop.
 	//-----------------------------------------------------------------
 	while(1)
     {
+		// if the unit is EVER triggered, it will no longer be in start up mode.
 		if(triggered)
+		{
+			startUp = 0;
+		}
+		
+		// if you are not in start-up mode (i.e. you are making measurements)
+		if(!startUp)
 		{
 			// check if we are starting a new frame (a new set of six display digits)
 			if(digit >= NUMBER_OF_DIGITS)
 			{
 				digit = 0;
 				double decade;
-			
-				// grab the current frequency and period
-				currentFreq = freq_in_measurement_Hz;
-				currentPeriod = period_measurement_s;
+				
+				
+				// if the last frequency measurement was done without any change in frequency division setting
+				if(adjustingFreqDiv == 0)
+				{
+					
+					// grab the current frequency and period
+					currentFreqIn =   freq_meas_Hz  * (double)( (uint32_t)1 << 2*freq_div );
+					currentPeriodIn = period_meas_s / (double)( (uint32_t)1 << 2*freq_div );
+				
+					// if the frequency applied to the ATtiny84 is too high,
+					if( (freq_meas_Hz > freq_meas_max) && (freq_div < freq_div_max) )
+					{
+						// try to decrease freq-meas (increase the frequency division)
+						freq_div++;
+						// record that you are adjusting frequency division settings.
+						adjustingFreqDiv = 1;
+					}
+				
+					// if timer1 has overflowed,
+					if( overflows && (freq_div > 0) )
+					{
+						// try to increase freq-meas (decrease the frequency division)
+						freq_div--;
+						// record that you are adjusting frequency division settings.
+						adjustingFreqDiv = 1;
+					}
+				}
 				
 				// determine what unit we want to use
-				if     (currentFreq >= 1e6)
+				if     (currentFreqIn >= 1e6)
 				{
 					unit = 0;							// use units of MHz
-					dispNumber = currentFreq/1.0e6;		// display MHz
+					dispNumber = currentFreqIn/1.0e6;		// display MHz
 				}
-				else if(currentFreq >= 1)
+				else if(currentFreqIn >= 1)
 				{
 					unit = 1;							// use units of Hz
-					dispNumber = currentFreq;			// display hertz
+					dispNumber = currentFreqIn;			// display hertz
 				}
-				else if(currentPeriod <= 60)
+				else if(currentPeriodIn <= 60)
 				{
 					unit = 2;							// use units of Seconds
-					dispNumber = currentPeriod;			// display seconds
+					dispNumber = currentPeriodIn;			// display seconds
 				}
 				else
 				{
 					unit = 3;							// use units of Minutes
-					dispNumber = currentPeriod/60.0;	// display minutes
+					dispNumber = currentPeriodIn/60.0;	// display minutes
 				}
 				
 				// default is a bogus value to indicate that the first significant figure has not been found yet
@@ -460,7 +534,7 @@ int main(void)
 		}
 		
 		
-		// if you have not triggered yet,
+		// if you have just started up and have not seen any transitions,
 		// (this is basically just something to do when the unit first starts up)
 		else
 		{
