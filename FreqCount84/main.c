@@ -26,25 +26,33 @@
 #include <avr/interrupt.h>		// this allows me to use interrupt functions
 #include "shift_out_24_PORTA.h"		// this gives us the function we need to utilize a shift register to shift OUT data.
 
+
+
 //=================================================================
 // pin definitions
 //=================================================================
 
+//-----------------------------------------------------------------
 // PORTB
+//-----------------------------------------------------------------
 #define p_freq_in			PORTB2		// Input digital signal (0 to 5V). We try to measure the frequency of this one.
 
-
-
+//-----------------------------------------------------------------
 // PORTA
-// Demultiplexer output pins
-//#define p_DEMUX_0 PORTA0				// these three pins control an 3-to 
-//#define p_DEMUX_1 PORTA1
-//#define p_DEMUX_2 PORTA2
-
+//-----------------------------------------------------------------
+// debug pin
+#define p_debug				PORTA0		// used for various debugging activities
+// unused pins
+#define p_unused_A1			PORTA1
+#define p_unused_A2			PORTA2
 // OUTPUT SHIFT REGISTER pins:
 #define p_SR_data			PORTA3		// this pin holds the data that must be clocked into the shift register
 #define p_SR_RCK			PORTA4		// this pin updates the outputs of the shift register
 #define p_SR_SCK			PORTA5		// this pin clocks data into the shift register
+// unused pins
+#define p_unused_A6			PORTA6
+#define p_unused_A7			PORTA7
+
 
 #define freq_div_bits 3					// there are three bits in the output shift register that are used for selecting the frequency division.
 #define freq_div_bit_mask ( (1<freq_div_bits) - 1)
@@ -71,6 +79,8 @@
 #define TCNT1H_reset (0)
 #define TCNT1L_reset (38)
 
+
+
 //=================================================================
 // function definitions
 //=================================================================
@@ -81,6 +91,7 @@
 #define toggle(port, pin)	port ^=  (1<<pin)			// this toggles a certain pin.
 #define set_input(portdir, pin) portdir &= ~(1<<pin)	// this sets a certain pin as an input.
 #define set_output(portdir, pin) portdir |= (1<<pin)	// this sets a certain pin as an output.
+
 
 
 //=================================================================
@@ -263,6 +274,19 @@ void init_input_interrupts()
 }
 
 
+
+// this function handles when the timer1 has a compare match.
+// mainly, this function simply handles changing the state of the device between warmup, active, and waiting
+ISR(TIM1_OVF_vect)
+{
+	// increment the counter that keeps track of how many times Timer1 has overflowed.
+	overflows++;
+	// TODO: remove this little debugging thingy
+	toggle(PORTA, p_debug);
+	
+}
+
+
 // this handles when freq_meas changes state
 ISR(PCINT1_vect)
 {
@@ -353,33 +377,45 @@ ISR(PCINT1_vect)
 }
 
 
-// this function handles when the timer1 has a compare match.
-// mainly, this function simply handles changing the state of the device between warmup, active, and waiting
-ISR(TIM1_OVF_vect)
-{
-	// increment the counter that keeps track of how many times Timer1 has overflowed.
-	overflows++;
-}
-
-
 
 // this is where the program starts
 int main(void)
 {
-	 // PORTB
-	 // set individual pin I/O directions
+	
+	//-----------------------------------------------------------------
+	// PORTB
+	//-----------------------------------------------------------------
+	// set individual pin I/O directions
 	set_input(DDRB, p_freq_in);
 	
 	
+	//-----------------------------------------------------------------
 	// PORTA
+	//-----------------------------------------------------------------
 	// set individual pin I/O directions
+	set_output(DDRA, p_debug);
 	set_output(DDRA, p_SR_data);
 	set_output(DDRA, p_SR_SCK);
 	set_output(DDRA, p_SR_RCK);
+	
 	// set the initial values of these pins
+	low(PORTA, p_debug);
 	low(PORTA, p_SR_data);
 	low(PORTA, p_SR_SCK);
 	low(PORTA, p_SR_RCK);
+	
+	// unused pins set as inputs
+	set_input(DDRA,p_unused_A1);
+	set_input(DDRA,p_unused_A2);
+	set_input(DDRA,p_unused_A6);
+	set_input(DDRA,p_unused_A7);
+	// unused pins have pull-up-resistor enabled
+	high(DDRA,p_unused_A1);
+	high(DDRA,p_unused_A2);
+	high(DDRA,p_unused_A6);
+	high(DDRA,p_unused_A7);
+	
+	
 	
 	// set up timers and interrupts
 	sei();								// enable global interrupts
