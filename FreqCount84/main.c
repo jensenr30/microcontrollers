@@ -24,7 +24,12 @@
 #include <avr/io.h>				// standard input/output functions
 #include <util/delay.h>			// include the use of the delay functions _delay_ms() and _delay_us()
 #include <avr/interrupt.h>		// this allows me to use interrupt functions
-#include "shift_out_24_PORTA.h"		// this gives us the function we need to utilize a shift register to shift OUT data.
+#include <stdio.h>				// This is used for the sprintf function which allows me to lazily print frequency measurements to the UART port
+								// this header appears to take up a whopping 1634 bytes of program memory.
+								// If I run out of program memory, I will want to try to write my own specialized small sprintf.
+								// Or, I could try to cut it out of the standard library.
+
+#include "shift_out_24_PORTA.h"	// this gives us the function we need to utilize a shift register to shift OUT data.
 
 
 
@@ -42,9 +47,9 @@
 //-----------------------------------------------------------------
 // debug pin
 #define p_debug				PORTA0		// used for various debugging activities
-// unused pins
-#define p_unused_A1			PORTA1
-#define p_unused_A2			PORTA2
+// UART pins
+#define p_UART_Tx			PORTA1		// outputs UART messages at TODO baudrate (frequency measurements output) characters. units of Hz. human readable.
+#define p_UART_trig			PORTA2		// (when this transitions from LOW to HIGH, the UART pin will 
 // OUTPUT SHIFT REGISTER pins:
 #define p_SR_data			PORTA3		// this pin holds the data that must be clocked into the shift register
 #define p_SR_RCK			PORTA4		// this pin updates the outputs of the shift register
@@ -153,7 +158,7 @@
 
 
 //=================================================================
-// variable declaration
+// variable declaration (and some definitions)
 //=================================================================
 
 // this keeps track of whether or not the counter has been triggered for the first time.
@@ -229,6 +234,10 @@ uint8_t digit = 0;
 // default data is all underlines
 uint8_t disp_data[6];// = {0x08,0x08,0x08,0x08,0x08,0x08};
 
+// this keeps track of whether or not we need to transmit the frequency data out the UART port.
+uint8_t transmitFrequencyMeasurementOverUART = 0;
+// this is how many bits per second the UART should be transmitting at
+#define UART_BAUD_RATE (115200)
 
 //=================================================================
 // function declarations
@@ -277,6 +286,14 @@ void init_input_interrupts()
 	// This corresponds to PORTB PB2 - ATtiny84 DIP package pin5.
 	// this interrupt will be triggered on a logical state change (rising/falling edge).
 	PCMSK1 |= (1<<PCINT10);
+	
+	// enable interrupts for port A pins (PCINT 0:7)
+	GIMSK |= (1<<PCIE0);
+	
+	// enable interrupts for PCINT 2 specifically
+	// this corresponds to PORTA PA2 - ATtiny84 DIP package pin 11
+	// this interrupt will be triggered on a logical state change (rising/falling edge).
+	PCMSK0 |= (1<<PCINT2);
 }
 
 
@@ -307,7 +324,57 @@ ISR(TIM1_OVF_vect)
 	
 }
 
+// interrupt service routine for Port A
+// this handles when the UART_trig pin changes state
+ISR(PCINT0_vect)
+{
+	uint8_t portAdata = PINA;
+	
+	// if the UART trigger pin went high,
+	if( portAdata & (1<<p_UART_trig) )
+	{
+		transmitFrequencyMeasurementOverUART = 1;
+	}
+	
+}
 
+
+
+void transmit_frequency_measurement_UART(double frequency_measurement, uint32_t baud_rate)
+{
+	// example number:
+	// 1.23456e+001 
+	// 13 characters. That includes the null at the end.
+	static uint8_t bytes = 13;
+	char str[bytes];
+	sprintf(str, "%.5e", frequency_measurement);
+	// replace the last character with a newline
+	str[bytes-1] = '\n';
+	
+	double clock_cycles_per_bit = (double)F_CPU / (double)baud_rate;
+	uint32_t delay_loop_1_cycles = round((clock_cycles_per_bit/3.0)) - 1;
+	
+	uint8_t by,bi;
+	for(by=0; by<bytes; by++)
+	{
+		for(bi=0; bi<8; bi++)
+		{
+			// set the UART pin to the correct value
+			if( str[by] & (1<<bi) )
+			{
+				high(PORTA,p_UART_Tx);
+			}
+			else
+			{
+				low(PORTA,p_UART_Tx);
+			}
+			// wait the bit time
+			_delay_loop_1(delay_loop_1_cycles);
+		}
+	}
+}
+
+// interrupt service routine for Port B
 // this handles when freq_meas changes state
 ISR(PCINT1_vect)
 {
@@ -424,21 +491,25 @@ int main(void)
 	set_output(DDRA, p_SR_data);
 	set_output(DDRA, p_SR_SCK);
 	set_output(DDRA, p_SR_RCK);
+	set_output(DDRA, p_UART_Tx);
+	
+	set_input(DDRA, p_UART_trig);
 	
 	// set the initial values of these pins
 	low(PORTA, p_debug);
 	low(PORTA, p_SR_data);
 	low(PORTA, p_SR_SCK);
 	low(PORTA, p_SR_RCK);
+	high(PORTA, p_UART_Tx);
+	
+	// enable pull-up resistor for the UART trigger pin
+	high(PORTA, p_UART_trig);
+	
 	
 	// unused pins set as inputs
-	set_input(DDRA,p_unused_A1);
-	set_input(DDRA,p_unused_A2);
 	set_input(DDRA,p_unused_A6);
 	set_input(DDRA,p_unused_A7);
 	// unused pins have pull-up-resistor enabled
-	high(DDRA,p_unused_A1);
-	high(DDRA,p_unused_A2);
 	high(DDRA,p_unused_A6);
 	high(DDRA,p_unused_A7);
 	
@@ -473,6 +544,13 @@ int main(void)
 		if(triggered)
 		{
 			startUp = 0;
+		}
+		
+		// if you need to transmit the frequency measurement over UART,
+		if(transmitFrequencyMeasurementOverUART)
+		{
+			// then do it. send the last frequency measurement over UART
+			transmit_frequency_measurement_UART(currentFreqIn,UART_BAUD_RATE);
 		}
 		
 		// if you are not in start-up mode (i.e. you are making measurements)
