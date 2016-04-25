@@ -796,10 +796,21 @@ int main(void)
 			startUp = 0;
 		}
 		
+		// if you need to transmit the frequency measurement over UART,
+		// and if you are not currently transmitting frequency measurements,
+		if(transmitFrequencyMeasurementOverUART)
+		{
+			// then do it. send the last frequency measurement over UART
+			transmit_frequency_measurement_UART();
+			// don't keep doing it.
+			// TODO: uncomment this:!!!
+			transmitFrequencyMeasurementOverUART = 0;
+		}
 		
 		// if you are not in start-up mode (i.e. you are making measurements)
 		if(!startUp)
 		{
+			
 			// check if we are starting a new frame (a new set of six display digits)
 			if(digit >= NUMBER_OF_DIGITS)
 			{
@@ -807,16 +818,6 @@ int main(void)
 				double decade;
 				
 				
-				// if you need to transmit the frequency measurement over UART,
-				// and if you are not currently transmitting frequency measurements,
-				if(transmitFrequencyMeasurementOverUART)
-				{
-					// then do it. send the last frequency measurement over UART
-					transmit_frequency_measurement_UART();
-					// don't keep doing it.
-					// TODO: uncomment this:!!!
-					//transmitFrequencyMeasurementOverUART = 0;
-				}
 				
 				// grab the current frequency and period
 				currentFreqIn =   freq_meas_Hz  * (double)( (uint32_t)1 << 2*freq_div );
@@ -911,20 +912,6 @@ int main(void)
 		// (this is basically just something to do when the unit first starts up)
 		else
 		{
-			
-			
-			
-			// if you need to transmit the frequency measurement over UART,
-			// and if you are not currently transmitting frequency measurements,
-			if(transmitFrequencyMeasurementOverUART)
-			{
-				// then do it. send the last frequency measurement over UART
-				transmit_frequency_measurement_UART();
-				// don't keep doing it.
-				// TODO: uncomment this:!!!
-				//transmitFrequencyMeasurementOverUART = 0;
-			}
-			
 			
 			// limit s to the number of segments
 			if(s >= 8){
