@@ -651,7 +651,20 @@ ISR(PCINT1_vect)
 	// if the signal went low,
 	if( !freq_in_state )
 	{
-		triggered = 1;
+		// if you have not triggered yet, you need to record when your first trigger was.
+		if(!triggered)
+		{
+			TCNT1H = 0;	// reset the timer1 count (both the high and low bytes)
+			TCNT1L = 0;	// this is a non zero value. see definitions of the reset values for better information
+			// reset all variables (Timer1 was already reset above)
+			freq_in_cycles = 0;
+			overflows = 0;
+			//OFF_time_timer = 0;
+			//OFF_time_overflows = 0;
+			triggered = 1;
+			return;
+		}
+		
 		// record that the input signal DID, in fact, have a (possibly another) falling edge.
 		freq_in_cycles++;
 		
