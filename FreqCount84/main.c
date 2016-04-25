@@ -237,9 +237,13 @@ uint8_t disp_data[6];// = {0x08,0x08,0x08,0x08,0x08,0x08};
 // this keeps track of whether or not we need to transmit the frequency data out the UART port.
 uint8_t transmitFrequencyMeasurementOverUART = 1;
 // this is how many bits per second the UART should be transmitting at
-#define UART_BAUD_RATE (9600)
-#define UART_BIT_CLOCK_CYCLES (174)		// 174 is setup for 115200 baud (or thereabouts)	2083 works well for 9600	// F_CPU / UART_BAUD_RATE
-#define UART_DELAY_LOOP_1_CYCLES_PER_BIT (694)	// 58 works okay for 115200. 694 should be decent for 9600.
+
+// these definitions choose what baud the FreqCount84 UART is transmitting at.
+// uncomment the one you want (and ONLY one)
+//#define UART_BAUD_9600 (1)
+#define UART_BAUD_19200 (1)
+//#define UART_BAUD_115200 (1)
+
 #define UART_MESSAGE_BYTES (1)//(13)			// 1.23456e+001\n   is thirteen characters
 volatile char UART_str[UART_MESSAGE_BYTES];		// this stores the data that we want to send out the UART.
 volatile uint8_t UART_byte = 0;					// keeps track of which byte is being transmitted
@@ -283,6 +287,17 @@ void init_timer1()
 }
 
 
+void disable_timer1_interrupts()
+{
+	TIMSK1 &= ~(1<<TOIE1);				// disable overflow-interrupt enable of timer 1.
+}
+void enable_timer1_interrupts()
+{
+	TIMSK1 |= (1<<TOIE1);				// enable overflow-interrupt enable of timer 1.
+}
+
+
+
 // enable and configure the input pin interrupts.
 void init_input_interrupts()
 {
@@ -303,6 +318,14 @@ void init_input_interrupts()
 	PCMSK0 |= (1<<PCINT2);
 }
 
+
+void disable_input_interrupts()
+{
+	// disable interrupts for port A pins (PCINT 0:7)
+	GIMSK &= ~(1<<PCIE0);
+	// disable interrupts for port B pins (PCINT 11:8).
+	GIMSK &= ~(1<<PCIE1);
+}
 
 
 // this function handles when the timer1 has a compare match.
@@ -350,19 +373,34 @@ ISR(PCINT0_vect)
 
 void UART_bit_delay()
 {
+	#ifdef UART_BAUD_9600
+		// this is setup for 9600 baud
+		_delay_loop_1(250);
+		_delay_loop_1(250);
+		_delay_loop_1(194);
+	#endif
+	
+	#ifdef UART_BAUD_19200
 	// this is setup for 9600 baud
 	_delay_loop_1(250);
-	_delay_loop_1(250);
-	_delay_loop_1(194);
+	_delay_loop_1(97);
+	#endif
 	
-	/*
-	// this is setup for 115200 baud
-	_delay_loop_1(58);
-	*/
+	
+	#ifdef UART_BAUD_115200
+		_delay_loop_1(58);
+	#endif
 }
 
+
+
+// this will transmit a single character out the UART port
 void UART_transmit_character(char TxChar)
 {
+	// start bit
+	low(PORTA,p_UART_Tx);
+	UART_bit_delay();
+		
 	uint8_t b;
 	for(b=0; b<8; b++)
 	{
@@ -377,11 +415,36 @@ void UART_transmit_character(char TxChar)
 			UART_bit_delay();
 		}
 	}
+	
+	// stop bit
+	high(PORTA,p_UART_Tx);
+	UART_bit_delay();
 }
 
 
 void transmit_frequency_measurement_UART()
 {
+	// diable all interrupts
+	disable_input_interrupts();
+	disable_timer1_interrupts();
+	// given that you are shutting down the frequency-measuring side of things, you need to realize that you could be missing things.
+	// you must record that you were not paying attention to the input frequency during this time.
+	// when you are done printing data to the UART, you will need to try to establish trigger again.
+	triggered = 0;
+	
+	// transmit a very important message
+	UART_transmit_character('F');
+	UART_transmit_character('U');
+	UART_transmit_character('C');
+	UART_transmit_character('K');
+	UART_transmit_character( 10);
+	
+	
+	// restore the interrupts to their former glory
+	 init_input_interrupts();
+	 enable_timer1_interrupts();
+	
+	/*
 	// start bit
 	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
 	
@@ -465,27 +528,9 @@ void transmit_frequency_measurement_UART()
 	
 	// stop bit
 	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	
-	/*
-	// start bit
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// print out \n LSB first
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// stop bit
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
 	*/
-	
-	
 	/*
+	
 	//-----------------------------------------------
 	// the point of this is to allow me to turn on the interrupt knowing that it will not immidiately interrupt me.
 	//-----------------------------------------------
@@ -507,7 +552,7 @@ void transmit_frequency_measurement_UART()
 	currentTimer1 += TCNT1H<<8;
 	
 	// output the start bit of the UART message
-	//low(PORTA, p_UART_Tx);
+	low(PORTA, p_UART_Tx);
 	
 	// you have begun transmitting
 	UART_transmitting = 1;
@@ -528,7 +573,7 @@ void transmit_frequency_measurement_UART()
 	*/
 }
 
-
+/*
 
 // this handles interrupts that occur when timer1 has an output compare match on value B
 // this is used to send data out the UART port.
@@ -576,7 +621,7 @@ ISR(TIM1_COMPB_vect)
 	
 }
 
-
+*/
 
 
 // interrupt service routine for Port B
@@ -751,16 +796,6 @@ int main(void)
 			startUp = 0;
 		}
 		
-		// if you need to transmit the frequency measurement over UART,
-		// and if you are not currently transmitting frequency measurements,
-		if(transmitFrequencyMeasurementOverUART)
-		{
-			// then do it. send the last frequency measurement over UART
-			transmit_frequency_measurement_UART();
-			// don't keep doing it.
-			// TODO: uncomment this:!!!
-			//transmitFrequencyMeasurementOverUART = 0;
-		}
 		
 		// if you are not in start-up mode (i.e. you are making measurements)
 		if(!startUp)
@@ -770,6 +805,18 @@ int main(void)
 			{
 				digit = 0;
 				double decade;
+				
+				
+				// if you need to transmit the frequency measurement over UART,
+				// and if you are not currently transmitting frequency measurements,
+				if(transmitFrequencyMeasurementOverUART)
+				{
+					// then do it. send the last frequency measurement over UART
+					transmit_frequency_measurement_UART();
+					// don't keep doing it.
+					// TODO: uncomment this:!!!
+					//transmitFrequencyMeasurementOverUART = 0;
+				}
 				
 				// grab the current frequency and period
 				currentFreqIn =   freq_meas_Hz  * (double)( (uint32_t)1 << 2*freq_div );
@@ -864,6 +911,21 @@ int main(void)
 		// (this is basically just something to do when the unit first starts up)
 		else
 		{
+			
+			
+			
+			// if you need to transmit the frequency measurement over UART,
+			// and if you are not currently transmitting frequency measurements,
+			if(transmitFrequencyMeasurementOverUART)
+			{
+				// then do it. send the last frequency measurement over UART
+				transmit_frequency_measurement_UART();
+				// don't keep doing it.
+				// TODO: uncomment this:!!!
+				//transmitFrequencyMeasurementOverUART = 0;
+			}
+			
+			
 			// limit s to the number of segments
 			if(s >= 8){
 				s = 0;
