@@ -228,16 +228,23 @@ double period_meas_s = 0;
 uint8_t sevenseg[10] = {0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x67};
 
 
-// this keeps track of which digit is being displayed (The Persistance of vision technique is used. Only one 7-segment display is lit at a time.)
+// this keeps track of which digit is being displayed (The persistence of vision technique is used. Only one 7-segment display is lit at a time.)
 uint8_t digit = 0;
 // this is the data that is displayed
 // default data is all underlines
 uint8_t disp_data[6];// = {0x08,0x08,0x08,0x08,0x08,0x08};
 
 // this keeps track of whether or not we need to transmit the frequency data out the UART port.
-uint8_t transmitFrequencyMeasurementOverUART = 0;
+uint8_t transmitFrequencyMeasurementOverUART = 1;
 // this is how many bits per second the UART should be transmitting at
-#define UART_BAUD_RATE (115200)
+#define UART_BAUD_RATE (9600)
+#define UART_BIT_CLOCK_CYCLES (174)		// 174 is setup for 115200 baud (or thereabouts)	2083 works well for 9600	// F_CPU / UART_BAUD_RATE
+#define UART_DELAY_LOOP_1_CYCLES_PER_BIT (694)	// 58 works okay for 115200. 694 should be decent for 9600.
+#define UART_MESSAGE_BYTES (1)//(13)			// 1.23456e+001\n   is thirteen characters
+volatile char UART_str[UART_MESSAGE_BYTES];		// this stores the data that we want to send out the UART.
+volatile uint8_t UART_byte = 0;					// keeps track of which byte is being transmitted
+volatile uint8_t UART_bit  = 0;					// keeps track of which bit  is being transmitted
+volatile uint8_t UART_transmitting = 0;			// this indicates whether or not a message is currently being sent out the UART.
 
 //=================================================================
 // function declarations
@@ -324,6 +331,8 @@ ISR(TIM1_OVF_vect)
 	
 }
 
+
+
 // interrupt service routine for Port A
 // this handles when the UART_trig pin changes state
 ISR(PCINT0_vect)
@@ -339,40 +348,236 @@ ISR(PCINT0_vect)
 }
 
 
-
-void transmit_frequency_measurement_UART(double frequency_measurement, uint32_t baud_rate)
+void UART_bit_delay()
 {
-	// example number:
-	// 1.23456e+001 
-	// 13 characters. That includes the null at the end.
-	static uint8_t bytes = 13;
-	char str[bytes];
-	sprintf(str, "%.5e", frequency_measurement);
-	// replace the last character with a newline
-	str[bytes-1] = '\n';
+	// this is setup for 9600 baud
+	_delay_loop_1(250);
+	_delay_loop_1(250);
+	_delay_loop_1(194);
 	
-	double clock_cycles_per_bit = (double)F_CPU / (double)baud_rate;
-	uint32_t delay_loop_1_cycles = round((clock_cycles_per_bit/3.0)) - 1;
-	
-	uint8_t by,bi;
-	for(by=0; by<bytes; by++)
+	/*
+	// this is setup for 115200 baud
+	_delay_loop_1(58);
+	*/
+}
+
+void UART_transmit_character(char TxChar)
+{
+	uint8_t b;
+	for(b=0; b<8; b++)
 	{
-		for(bi=0; bi<8; bi++)
+		if(TxChar & (1<<b))
 		{
-			// set the UART pin to the correct value
-			if( str[by] & (1<<bi) )
-			{
-				high(PORTA,p_UART_Tx);
-			}
-			else
-			{
-				low(PORTA,p_UART_Tx);
-			}
-			// wait the bit time
-			_delay_loop_1(delay_loop_1_cycles);
+			high(PORTA,p_UART_Tx);
+			UART_bit_delay();
+		}
+		else
+		{
+			low(PORTA,p_UART_Tx);
+			UART_bit_delay();
 		}
 	}
 }
+
+
+void transmit_frequency_measurement_UART()
+{
+	// start bit
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// print out D LSB first
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx);	UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0	
+	
+	// stop bit
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	
+	
+	// start bit
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// print out I LSB first
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// stop bit
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	
+	
+	// start bit
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// print out C LSB first
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// stop bit
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	
+	
+	// start bit
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// print out K LSB first
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// stop bit
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	
+	
+	// start bit
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// print out \r LSB first
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// stop bit
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	
+	/*
+	// start bit
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// print out \n LSB first
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
+	
+	// stop bit
+	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
+	*/
+	
+	
+	/*
+	//-----------------------------------------------
+	// the point of this is to allow me to turn on the interrupt knowing that it will not immidiately interrupt me.
+	//-----------------------------------------------
+	
+	// record the current time (from timer1)
+	// read from low byte then add the high byte (low byte first)
+	uint16_t currentTimer1 = TCNT1L;
+	currentTimer1 += TCNT1H<<8;
+	// prepare the next output compare match interrupt
+	OCR1BH = currentTimer1 >> 8;					// set high byte of the output compare register
+	OCR1BL = currentTimer1 & (0xff);				// set low  byte of the output compare register
+	
+	// enable output match compare so that you can send the message out.
+	TIMSK1 |= (1<<OCIE1B);			// enable the output-compare interrupt for register B
+	
+	// record the current time (from timer1)
+	// read from low byte then add the high byte (low byte first)
+	currentTimer1 = TCNT1L;
+	currentTimer1 += TCNT1H<<8;
+	
+	// output the start bit of the UART message
+	//low(PORTA, p_UART_Tx);
+	
+	// you have begun transmitting
+	UART_transmitting = 1;
+	
+	// determine when you need to send the next bit
+	uint16_t nextTimer1 = currentTimer1 + UART_BIT_CLOCK_CYCLES;
+	// prepare the next output compare match interrupt
+	OCR1BH = nextTimer1 >> 8;					// set high byte of the output compare register
+	OCR1BL = nextTimer1 & (0xff);				// set low  byte of the output compare register
+	
+	// start transmitting the message from the beginning of the message
+	UART_bit = 0;
+	UART_byte = 0;
+	UART_str[0] = 'D';
+	// TODO: debugging get rid of this bogus string data
+	//UART_str[0] = UART_str[2] = UART_str[4] = UART_str[6] = UART_str[8] = UART_str[10] = UART_str[12] = 'U';
+	//UART_str[1] = UART_str[3] = UART_str[5] = UART_str[7] = UART_str[9] = UART_str[11] = ' ';
+	*/
+}
+
+
+
+// this handles interrupts that occur when timer1 has an output compare match on value B
+// this is used to send data out the UART port.
+// When the 16 bit timer is clocked with the 20 MHz clock, this can operate at baud rates down to 305.1758 baud.
+ISR(TIM1_COMPB_vect)
+{
+	// record the current time (from timer1)
+	// read from low byte then add the high byte (low byte first)
+	uint16_t currentTimer1 = TCNT1L;
+	currentTimer1 += TCNT1H<<8;
+	// determine when you need to send the next bit
+	uint16_t nextTimer1 = currentTimer1 + UART_BIT_CLOCK_CYCLES;
+	// prepare the next output compare match interrupt
+	OCR1BH = nextTimer1 >> 8;					// set high byte of the output compare register
+	OCR1BL = nextTimer1 & (0xff);				// set low  byte of the output compare register
+	
+	
+	if(UART_byte >= UART_MESSAGE_BYTES)			// if you are done transmitting your message
+	{
+		TIMSK1 &= ~(1<<OCIE1B);						// turn off output-compare B
+		high(PORTA,p_UART_Tx);						// leave the output pin in the high state.
+		UART_transmitting = 0;						// you are done transmitting
+		return;										// and quit transmitting until you get a request to transmit again
+	}
+	
+	
+	UART_bit++;									// increment the bit (NEXT time, output the NEXT bit).
+	if(UART_bit >= 8)							// if you have transmitted 8 bits,
+	{
+		UART_bit = 0;								// move on to the next byte
+		UART_byte++;
+	}
+	
+	// debugging:
+	// high(PORTA,p_UART_Tx);
+	
+	if( UART_str[UART_byte] & (1<<UART_bit) )	// if the bit is supposed to be high now,
+	{
+		high(PORTA,p_UART_Tx);						// set it high
+	}
+	else										// otherwise,
+	{
+		low(PORTA,p_UART_Tx);						// set it low
+	}
+	
+}
+
+
+
 
 // interrupt service routine for Port B
 // this handles when freq_meas changes state
@@ -547,10 +752,14 @@ int main(void)
 		}
 		
 		// if you need to transmit the frequency measurement over UART,
+		// and if you are not currently transmitting frequency measurements,
 		if(transmitFrequencyMeasurementOverUART)
 		{
 			// then do it. send the last frequency measurement over UART
-			transmit_frequency_measurement_UART(currentFreqIn,UART_BAUD_RATE);
+			transmit_frequency_measurement_UART();
+			// don't keep doing it.
+			// TODO: uncomment this:!!!
+			//transmitFrequencyMeasurementOverUART = 0;
 		}
 		
 		// if you are not in start-up mode (i.e. you are making measurements)
@@ -683,7 +892,7 @@ int main(void)
 			// update the output registers
 			low(PORTA,p_SR_RCK);
 			high(PORTA,p_SR_RCK);
-			_delay_ms(50);
+			_delay_ms(30);
 			
 			// increment the segment counter
 			s++;
