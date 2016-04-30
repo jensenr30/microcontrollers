@@ -48,7 +48,7 @@
 // debug pin
 #define p_debug				PORTA0		// used for various debugging activities
 // UART pins
-#define p_UART_Tx			PORTA1		// outputs UART messages at TODO baudrate (frequency measurements output) characters. units of Hz. human readable.
+#define p_UART_Tx			PORTA1		// outputs UART messages at UART_BAUD_XXXXX (frequency measurements output) characters. units of Hz. human readable.
 #define p_UART_trig			PORTA2		// (when this transitions from LOW to HIGH, the UART pin will 
 // OUTPUT SHIFT REGISTER pins:
 #define p_SR_data			PORTA3		// this pin holds the data that must be clocked into the shift register
@@ -163,20 +163,20 @@
 
 // this keeps track of whether or not the counter has been triggered for the first time.
 // when the counter decides that it needs to change the frequency division, this will be reset to 0.
-uint8_t startUp = 1;
+volatile uint8_t startUp = 1;
 // this keeps track of whether or not the device has been triggered at least once using the latest frequency division settings.
-uint8_t triggered = 0;
+volatile uint8_t triggered = 0;
 // this keeps track of whether or not the frequency division settings have been changed during the current measurement period.
 // 0 indicates	the current measurement is valid and has been made with no change to the frequency division settings.
 // 1 indicates	the current measurement is invalid because the frequency division settings were just changed.
 // 2 indicates	a measurement is being performed that WILL be valid when it is complete.
-uint8_t adjustingFreqDiv = 0;
+volatile uint8_t adjustingFreqDiv = 0;
 
 // this keeps track of how many times Timer1 has overflowed.
 // with a clock frequency of 20 MHz, a 16-bit timer, and a 32-bit overflow counter, this program should be able to count periods as long as 162 days.
-uint32_t overflows = 0;
+volatile uint32_t overflows = 0;
 // this records how many cycles (periods) have occurred on the p_freq_in pin.
-uint16_t freq_in_cycles = 0;
+volatile uint16_t freq_in_cycles = 0;
 // this specifies how to divide the input frequency
 // the amount that the frequency will be divided before being presented at the input of the ATtiny84 is given as:
 // freq_meas = freq_in / ( 2 ^ (2*freq_div) );
@@ -192,7 +192,7 @@ uint16_t freq_in_cycles = 0;
 //	5		|	1024	|	2^10
 //	6		|	4096	|	2^12
 //	> 6		|	4096	|	2^12	(max division from the 74**4040)
-uint8_t freq_div = 0;
+volatile uint8_t freq_div = 0;
 // this is the maximum valid frequency division setting
 #define freq_div_max ((uint8_t)6)
 #define freq_div_min ((uint8_t)0)
@@ -235,7 +235,7 @@ uint8_t digit = 0;
 uint8_t disp_data[6];// = {0x08,0x08,0x08,0x08,0x08,0x08};
 
 // this keeps track of whether or not we need to transmit the frequency data out the UART port.
-uint8_t transmitFrequencyMeasurementOverUART = 1;
+volatile uint8_t transmitFrequencyMeasurementOverUART = 1;
 // this is how many bits per second the UART should be transmitting at
 
 // these definitions choose what baud the FreqCount84 UART is transmitting at.
@@ -335,7 +335,7 @@ ISR(TIM1_OVF_vect)
 	// increment the counter that keeps track of how many times Timer1 has overflowed.
 	overflows++;
 	// TODO: remove this little debugging thingy
-	toggle(PORTA, p_debug);
+	//toggle(PORTA, p_debug);
 	
 	// if the number of overflows goes above what should be allowed,
 	// AND if the frequency division CAN be decreased
@@ -386,7 +386,7 @@ void UART_bit_delay()
 	_delay_loop_1(97);
 	#endif
 	
-	
+	// I think this needs some work. 11500 does not seem to work well currently.
 	#ifdef UART_BAUD_115200
 		_delay_loop_1(58);
 	#endif
@@ -427,22 +427,22 @@ void transmit_frequency_measurement_UART()
 	// diable all interrupts
 	disable_input_interrupts();
 	disable_timer1_interrupts();
+	
 	// given that you are shutting down the frequency-measuring side of things, you need to realize that you could be missing things.
 	// you must record that you were not paying attention to the input frequency during this time.
 	// when you are done printing data to the UART, you will need to try to establish trigger again.
-	triggered = 0;
+	triggered= 0;
 	
 	// transmit a very important message
 	UART_transmit_character('F');
 	UART_transmit_character('U');
 	UART_transmit_character('C');
 	UART_transmit_character('K');
-	UART_transmit_character( 10);
-	
+	UART_transmit_character(10 );
 	
 	// restore the interrupts to their former glory
-	 init_input_interrupts();
-	 enable_timer1_interrupts();
+	enable_timer1_interrupts();
+	init_input_interrupts();
 	
 	/*
 	// start bit
@@ -654,69 +654,73 @@ ISR(PCINT1_vect)
 		// if you have not triggered yet, you need to record when your first trigger was.
 		if(!triggered)
 		{
-			TCNT1H = 0;	// reset the timer1 count (both the high and low bytes)
-			TCNT1L = 0;	// this is a non zero value. see definitions of the reset values for better information
-			// reset all variables (Timer1 was already reset above)
-			freq_in_cycles = 0;
+			// reset all variables
+			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
+			TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
 			overflows = 0;
+			freq_in_cycles = 0;
 			//OFF_time_timer = 0;
 			//OFF_time_overflows = 0;
 			triggered = 1;
-			return;
+			// TODO: remove debugging code
+			//high(PORTA,p_debug);
 		}
-		
-		// record that the input signal DID, in fact, have a (possibly another) falling edge.
-		freq_in_cycles++;
-		
-		// calculate the number of cycles that have taken place since the beginning of the measurement period
-		uint32_t timer1_cycles = ((uint32_t)currentOverflows<<16) + (uint32_t)currentTimer1;
-		
-		// if the current sample has been going for the necessary amount of time
-		// (or if the frequency division settings were just changed)
-		if( timer1_cycles >= freq_calc_min_clock_cycles )
+		// if you HAVE triggered,
+		else
 		{
-			// start your next sample by resetting Timer1.
-			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
-			TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
+			// record that the input signal DID, in fact, have another falling edge.
+			freq_in_cycles++;
 			
-			// calculate the period over which this sampled was performed.
-			double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
-			// record the frequency
-			freq_meas_Hz = freq_in_cycles/period_sec;
-			// calculate the period
-			period_meas_s = 1/freq_meas_Hz;
-			// calculate the OFF_time in seconds
-			//double OFF_time_sec = (OFF_time_timer*clock_period_sec) + (OFF_time_overflows*overflow_period_sec);
-			// record the duty cycle
-			//freq_in_duty_cycle = OFF_time_sec/period_sec;
+			// calculate the number of cycles that have taken place since the beginning of the measurement period
+			uint32_t timer1_cycles = ((uint32_t)currentOverflows<<16) + (uint32_t)currentTimer1;
+			
+			// if the current sample has been going for the necessary amount of time
+			// (or if the frequency division settings were just changed)
+			if( timer1_cycles >= freq_calc_min_clock_cycles )
+			{
+				// start your next sample by resetting Timer1.
+				TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
+				TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
 				
-			// reset all variables (Timer1 was already reset above)
-			freq_in_cycles = 0;
-			overflows = 0;
-			//OFF_time_timer = 0;
-			//OFF_time_overflows = 0;
+				// calculate the period over which this sampled was performed.
+				double period_sec =  (currentTimer1*clock_period_sec) + (overflows        *overflow_period_sec);
+				// record the frequency
+				freq_meas_Hz = freq_in_cycles/period_sec;
+				// calculate the period
+				period_meas_s = 1/freq_meas_Hz;
+				// calculate the OFF_time in seconds
+				//double OFF_time_sec = (OFF_time_timer*clock_period_sec) + (OFF_time_overflows*overflow_period_sec);
+				// record the duty cycle
+				//freq_in_duty_cycle = OFF_time_sec/period_sec;
+				
+				// TODO: remove debugging thing here
+				toggle(PORTA,p_debug);
+				
+				// reset all variables (Timer1 was already reset above)
+				freq_in_cycles = 0;
+				overflows = 0;
+				//OFF_time_timer = 0;
+				//OFF_time_overflows = 0;
 			
-			// if the frequency that was just measured is greater than the max frequency you would like to see at the input of the ATtiny84,
-			// AND the freq_div CAN be increased
-			if(freq_meas_Hz > freq_meas_max && freq_div < freq_div_max)
-			{
-				// attempt to lower it
-				freq_div++;
-			}
-			// if the frequency that was just measured is less than the min frequency you would like to see at the input of the ATtiny84,
-			// AND the freq_div CAN be decreased
-			if(freq_meas_Hz < freq_meas_min && freq_div > freq_div_min)
-			{
-				// attempt to lower it
-				freq_div--;
-			}
-			
-			
-		}
-		
-		
-		
-	}
+				// if the frequency that was just measured is greater than the max frequency you would like to see at the input of the ATtiny84,
+				// AND the freq_div CAN be increased
+				if(freq_meas_Hz > freq_meas_max && freq_div < freq_div_max)
+				{
+					// attempt to lower it
+					freq_div++;
+				}
+				// if the frequency that was just measured is less than the min frequency you would like to see at the input of the ATtiny84,
+				// AND the freq_div CAN be decreased
+				if(freq_meas_Hz < freq_meas_min && freq_div > freq_div_min)
+				{
+					// attempt to lower it
+					freq_div--;
+				}
+			} // if(you can make a freq measurement)
+		}// if(you have triggered)
+	}// if the input was a <rising/falling> edge
+	
+	// if the input state change was not in the right polarity,
 	else
 	{
 		
@@ -731,7 +735,7 @@ ISR(PCINT1_vect)
 	}
 	
 	
-}
+}// end the ISR for freq measurement input
 
 
 
@@ -816,7 +820,6 @@ int main(void)
 			// then do it. send the last frequency measurement over UART
 			transmit_frequency_measurement_UART();
 			// don't keep doing it.
-			// TODO: uncomment this:!!!
 			transmitFrequencyMeasurementOverUART = 0;
 		}
 		
