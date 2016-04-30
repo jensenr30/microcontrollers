@@ -24,10 +24,14 @@
 #include <avr/io.h>				// standard input/output functions
 #include <util/delay.h>			// include the use of the delay functions _delay_ms() and _delay_us()
 #include <avr/interrupt.h>		// this allows me to use interrupt functions
-#include <stdio.h>				// This is used for the sprintf function which allows me to lazily print frequency measurements to the UART port
-								// this header appears to take up a whopping 1634 bytes of program memory.
-								// If I run out of program memory, I will want to try to write my own specialized small sprintf.
-								// Or, I could try to cut it out of the standard library.
+#include <stdio.h>				// This takes up a SHITLOAD of space.
+								// you need to make sure that the following options/flags are in your linker settings when you compile this project:
+								//		-Wl,-u,vfprintf -lprintf_flt -lm
+								// the above linker options make sprintf() work for FLOATING POINT type numbers.
+								// otherwise, it will output garbage when it gets floating point numbers as inputs.
+								// if I ever run out of space, I should reuse my float-to-string function that I created in main().
+								// because stdio.h (with those linker flags) take up at least half of my available memory on an ATtiny84.
+								
 
 #include "shift_out_24_PORTA.h"	// this gives us the function we need to utilize a shift register to shift OUT data.
 
@@ -87,6 +91,9 @@
 #define TCNT1H_reset (0)
 #define TCNT1L_reset (38)
 
+// this is the same as the TCNT1X_reset variables, except these are used when trigger has been reset (when a message is sent over UART or when the device starts up)
+#define TCNT1H_reset_triggered (0)
+#define TCNT1L_reset_triggered (0)
 
 
 //=================================================================
@@ -244,7 +251,7 @@ volatile uint8_t transmitFrequencyMeasurementOverUART = 1;
 #define UART_BAUD_19200 (1)
 //#define UART_BAUD_115200 (1)
 
-#define UART_MESSAGE_BYTES (1)//(13)			// 1.23456e+001\n   is thirteen characters
+#define UART_MESSAGE_BYTES (13)					// 1.23456e+001\n   is thirteen characters
 volatile char UART_str[UART_MESSAGE_BYTES];		// this stores the data that we want to send out the UART.
 volatile uint8_t UART_byte = 0;					// keeps track of which byte is being transmitted
 volatile uint8_t UART_bit  = 0;					// keeps track of which bit  is being transmitted
@@ -422,7 +429,7 @@ void UART_transmit_character(char TxChar)
 }
 
 
-void transmit_frequency_measurement_UART()
+void transmit_frequency_measurement_UART(double freq_to_report)
 {
 	// diable all interrupts
 	disable_input_interrupts();
@@ -434,194 +441,29 @@ void transmit_frequency_measurement_UART()
 	triggered= 0;
 	
 	// transmit a very important message
-	UART_transmit_character('F');
-	UART_transmit_character('U');
-	UART_transmit_character('C');
-	UART_transmit_character('K');
-	UART_transmit_character(10 );
+	//UART_transmit_character('F');
+	//UART_transmit_character('U');
+	//UART_transmit_character('C');
+	//UART_transmit_character('K');
+	//UART_transmit_character(10 );
+	
+	// create the string that will be printed over UART
+	char *str = "1.23456e+000";
+	sprintf(str, "%.5e", freq_to_report);//freq_meas_Hz);
+	
+	str[UART_MESSAGE_BYTES-1] = 10;		// newline
+	
+	uint8_t i;
+	for(i=0; i<UART_MESSAGE_BYTES; i++)
+	{
+		UART_transmit_character(str[i]);
+	}
 	
 	// restore the interrupts to their former glory
 	enable_timer1_interrupts();
 	init_input_interrupts();
 	
-	/*
-	// start bit
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// print out D LSB first
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx);	UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0	
-	
-	// stop bit
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	
-	
-	// start bit
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// print out I LSB first
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// stop bit
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	
-	
-	// start bit
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// print out C LSB first
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// stop bit
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	
-	
-	// start bit
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// print out K LSB first
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// stop bit
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	
-	
-	// start bit
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// print out \r LSB first
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	low(PORTA,p_UART_Tx); UART_bit_delay();		// 0
-	
-	// stop bit
-	high(PORTA,p_UART_Tx); UART_bit_delay();		// 1
-	*/
-	/*
-	
-	//-----------------------------------------------
-	// the point of this is to allow me to turn on the interrupt knowing that it will not immidiately interrupt me.
-	//-----------------------------------------------
-	
-	// record the current time (from timer1)
-	// read from low byte then add the high byte (low byte first)
-	uint16_t currentTimer1 = TCNT1L;
-	currentTimer1 += TCNT1H<<8;
-	// prepare the next output compare match interrupt
-	OCR1BH = currentTimer1 >> 8;					// set high byte of the output compare register
-	OCR1BL = currentTimer1 & (0xff);				// set low  byte of the output compare register
-	
-	// enable output match compare so that you can send the message out.
-	TIMSK1 |= (1<<OCIE1B);			// enable the output-compare interrupt for register B
-	
-	// record the current time (from timer1)
-	// read from low byte then add the high byte (low byte first)
-	currentTimer1 = TCNT1L;
-	currentTimer1 += TCNT1H<<8;
-	
-	// output the start bit of the UART message
-	low(PORTA, p_UART_Tx);
-	
-	// you have begun transmitting
-	UART_transmitting = 1;
-	
-	// determine when you need to send the next bit
-	uint16_t nextTimer1 = currentTimer1 + UART_BIT_CLOCK_CYCLES;
-	// prepare the next output compare match interrupt
-	OCR1BH = nextTimer1 >> 8;					// set high byte of the output compare register
-	OCR1BL = nextTimer1 & (0xff);				// set low  byte of the output compare register
-	
-	// start transmitting the message from the beginning of the message
-	UART_bit = 0;
-	UART_byte = 0;
-	UART_str[0] = 'D';
-	// TODO: debugging get rid of this bogus string data
-	//UART_str[0] = UART_str[2] = UART_str[4] = UART_str[6] = UART_str[8] = UART_str[10] = UART_str[12] = 'U';
-	//UART_str[1] = UART_str[3] = UART_str[5] = UART_str[7] = UART_str[9] = UART_str[11] = ' ';
-	*/
 }
-
-/*
-
-// this handles interrupts that occur when timer1 has an output compare match on value B
-// this is used to send data out the UART port.
-// When the 16 bit timer is clocked with the 20 MHz clock, this can operate at baud rates down to 305.1758 baud.
-ISR(TIM1_COMPB_vect)
-{
-	// record the current time (from timer1)
-	// read from low byte then add the high byte (low byte first)
-	uint16_t currentTimer1 = TCNT1L;
-	currentTimer1 += TCNT1H<<8;
-	// determine when you need to send the next bit
-	uint16_t nextTimer1 = currentTimer1 + UART_BIT_CLOCK_CYCLES;
-	// prepare the next output compare match interrupt
-	OCR1BH = nextTimer1 >> 8;					// set high byte of the output compare register
-	OCR1BL = nextTimer1 & (0xff);				// set low  byte of the output compare register
-	
-	
-	if(UART_byte >= UART_MESSAGE_BYTES)			// if you are done transmitting your message
-	{
-		TIMSK1 &= ~(1<<OCIE1B);						// turn off output-compare B
-		high(PORTA,p_UART_Tx);						// leave the output pin in the high state.
-		UART_transmitting = 0;						// you are done transmitting
-		return;										// and quit transmitting until you get a request to transmit again
-	}
-	
-	
-	UART_bit++;									// increment the bit (NEXT time, output the NEXT bit).
-	if(UART_bit >= 8)							// if you have transmitted 8 bits,
-	{
-		UART_bit = 0;								// move on to the next byte
-		UART_byte++;
-	}
-	
-	// debugging:
-	// high(PORTA,p_UART_Tx);
-	
-	if( UART_str[UART_byte] & (1<<UART_bit) )	// if the bit is supposed to be high now,
-	{
-		high(PORTA,p_UART_Tx);						// set it high
-	}
-	else										// otherwise,
-	{
-		low(PORTA,p_UART_Tx);						// set it low
-	}
-	
-}
-
-*/
 
 
 // interrupt service routine for Port B
@@ -655,15 +497,13 @@ ISR(PCINT1_vect)
 		if(!triggered)
 		{
 			// reset all variables
-			TCNT1H = TCNT1H_reset;						// reset the timer1 count (both the high and low bytes)
-			TCNT1L = TCNT1L_reset;						// this is a non zero value. see definitions of the reset values for better information
+			TCNT1H = TCNT1H_reset_triggered;						// reset the timer1 count (both the high and low bytes)
+			TCNT1L = TCNT1L_reset_triggered;						// this is a non zero value. see definitions of the reset values for better information
 			overflows = 0;
 			freq_in_cycles = 0;
 			//OFF_time_timer = 0;
 			//OFF_time_overflows = 0;
 			triggered = 1;
-			// TODO: remove debugging code
-			//high(PORTA,p_debug);
 		}
 		// if you HAVE triggered,
 		else
@@ -693,7 +533,7 @@ ISR(PCINT1_vect)
 				// record the duty cycle
 				//freq_in_duty_cycle = OFF_time_sec/period_sec;
 				
-				// TODO: remove debugging thing here
+				// this is for debugging to show where the frequency measurement happens
 				toggle(PORTA,p_debug);
 				
 				// reset all variables (Timer1 was already reset above)
@@ -818,7 +658,7 @@ int main(void)
 		if(transmitFrequencyMeasurementOverUART)
 		{
 			// then do it. send the last frequency measurement over UART
-			transmit_frequency_measurement_UART();
+			transmit_frequency_measurement_UART(currentFreqIn);
 			// don't keep doing it.
 			transmitFrequencyMeasurementOverUART = 0;
 		}
